@@ -133,6 +133,57 @@ export function gradeOf(winDrop: number, playedBest: boolean): MoveGrade {
   return "blunder";
 }
 
+/*
+ * 한 수의 정확도(0~100). 승률을 하나도 안 흘렸으면 100 이다.
+ *
+ * **리체스 공식을 통째로 가져온 것이 아니다.** 그 공식은 두 단계인데 앞 단계(엔진
+ * 점수를 승률로 옮기기)가 체스 기물에 묶여 있다. 우리는 그 자리에 위의 winChance 를
+ * 쓴다 - k=0.18 은 장기 기물을 하나씩 빼서 재어 맞춘 값이다. 뒤 단계는 입력이
+ * "승률이 몇 %p 떨어졌나" 하나뿐이라 종목에 안 묶인다. 그래서 뒤 단계만 가져왔다.
+ *
+ * **우리 등급 경계와도 맞아떨어진다** - 5%p(아쉬운 수)가 79.8%, 20%p(큰 실수)가
+ * 40.0% 다. 그 경계는 장기 기준으로 따로 정한 값인데 둥근 숫자에 떨어졌다.
+ *
+ * 2026-10-16 에 엔진끼리 11판 994수를 두게 해 재 봤다. 18급 74.7 · 5급 87.7 ·
+ * 1급 89.9 · 5단 95.4(단순평균)로 급수를 따라 올랐다. 측정 방법과 한계는
+ * docs/DECISIONS.md 에 있다.
+ */
+function moveAccuracy(winDrop: number): number {
+  const pp = Math.max(0, Math.min(100, winDrop * 100));
+  const raw = 103.1668 * Math.exp(-0.04354 * pp) - 3.1669;
+  return Math.max(0, Math.min(100, raw));
+}
+
+/**
+ * 조화평균이 0 으로 나누지 않게 막는 하한.
+ *
+ * 승률을 80%p 넘게 흘리면 한 수 정확도가 0 이 된다. 위 측정에서 가장 나쁜 수가
+ * 8.4% 라 실제로는 한 번도 안 걸렸지만, 안 걸린다고 없어도 되는 것은 아니다.
+ */
+const ACCURACY_FLOOR = 1;
+
+/**
+ * 한 판에서 한 쪽이 둔 수들의 정확도(0~100). 그 쪽이 둔 수가 없으면 `null`.
+ *
+ * **조화평균이다.** 단순평균은 실수를 묻어 버린다 - 18급은 둔 수의 10.6%가 큰 실수인데도
+ * 단순평균이 74.7%를 준다. 조화평균은 62.6%를 주고, 사다리 양 끝을 32.2%p 벌린다
+ * (단순평균은 20.7%p). 낮은 값에 끌려가는 성질이 여기서는 바라는 성질이다.
+ *
+ * **`winDrop` 이 늘 숫자라고 믿는다.** archive.ts 의 `isCurrentReview` 가 그 값이 없는
+ * 옛 복기를 '복기 전' 으로 걸러 다시 돌리게 해 준다. 그 검사를 걷어내면 여기가 NaN 이 된다.
+ *
+ * 소수점은 화면에서 버린다. 표본이 급수마다 판 두셋이라 `88.3%` 는 없는 정밀도다.
+ */
+export function accuracyOf(rows: ReviewedMove[], side: Side): number | null {
+  const mine = rows.filter((r) => r.mover === side);
+  if (mine.length === 0) return null;
+  const sum = mine.reduce(
+    (acc, r) => acc + 1 / Math.max(moveAccuracy(r.winDrop), ACCURACY_FLOOR),
+    0
+  );
+  return mine.length / sum;
+}
+
 /** 손해가 기물로 치면 얼마쯤인지. 경계가 흐릿해서 폭을 넓게 잡는다. */
 function lossInPieces(loss: number): string | null {
   if (loss >= 8) return "차 한 짝쯤";

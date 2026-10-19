@@ -16,7 +16,8 @@ import {
   어림시간,
 } from "../../engine/levels";
 import type { ReviewProgress, ReviewedMove } from "../../janggi/review";
-import { GRADE_LABEL, winPercent } from "../../janggi/review";
+import { GRADE_LABEL, accuracyOf, winPercent } from "../../janggi/review";
+import type { Side } from "../../janggi/pieces";
 import { SIDE_LABEL } from "../../janggi/pieces";
 
 interface Props {
@@ -28,6 +29,8 @@ interface Props {
   running: boolean;
   progress: ReviewProgress | null;
   reviewed: ReviewedMove[] | null;
+  /** 이 판에서 내가 잡았던 쪽. 정확도는 이쪽이 둔 수만 센다. */
+  mySide: Side;
   /** 지금 판에 떠 있는 수 (history 인덱스) */
   cursor: number;
   error: string | null;
@@ -37,7 +40,8 @@ interface Props {
 
 export function ReviewPanel(props: Props) {
   const {
-    moveCount, depthId, threads, onDepth, running, progress, reviewed, cursor, error, onStart, onStop,
+    moveCount, depthId, threads, onDepth, running, progress, reviewed, mySide, cursor, error,
+    onStart, onStop,
   } = props;
 
   const depth = reviewDepthById(depthId);
@@ -153,11 +157,25 @@ export function ReviewPanel(props: Props) {
       ? `기보 전체를 훑고, 판이 갈린 ${deepCount}수를 다시 자세히 봤습니다.`
       : "기보 전체를 훑었습니다. 크게 갈린 수가 없어 더 볼 곳이 없었습니다.";
 
+  /*
+   * 내가 둔 수들의 정확도. 한 판을 숫자 하나로 말한다.
+   *
+   * **복기 깊이를 같이 적지 않는다.** 같은 판을 '정밀' 로 다시 복기하면 숫자가 조금
+   * 달라지는데, 깊이까지 적으면 제목 줄이 길어지고 대부분은 기본값으로만 돌린다.
+   * 아는 구멍이고 docs/DECISIONS.md 에 적어 두었다.
+   *
+   * 소수점은 버린다. 표본이 급수마다 판 두셋이라 '88.3%' 는 없는 정밀도다.
+   */
+  const accuracy = accuracyOf(reviewed, mySide);
+
   // grown — 복기를 돌린 뒤에만 이 패널이 오른쪽 칸의 남는 높이를 먹는다(layout.css).
   // 돌리기 전에는 넣을 것이 깊이와 시작 버튼뿐이라, 늘려 봐야 빈 칸만 커진다.
   return (
     <div className="panel review grown">
-      <div className="panel-title">복기</div>
+      <div className="panel-title">
+        복기
+        {accuracy !== null && <span className="panel-meta">정확도 {Math.round(accuracy)}%</span>}
+      </div>
       {current ? (
         <MoveComment
           r={current}

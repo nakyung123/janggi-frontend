@@ -999,6 +999,7 @@ export default function App() {
                   running={review.running}
                   progress={review.progress}
                   reviewed={reviewed}
+                  mySide={openGame.mySide}
                   cursor={cursor}
                   error={review.error}
                   onStart={() => void startReview()}

@@ -9,7 +9,7 @@ import { START_FEN, parseFen } from "./board";
 import type { Board } from "./board";
 import type { ReviewInput, ReviewedMove } from "./review";
 import {
-  clampScore, gradeOf, pickDeepMoves, reviewMove, bestArrowOf, winChance, winPercent,
+  accuracyOf, clampScore, gradeOf, pickDeepMoves, reviewMove, bestArrowOf, winChance, winPercent,
 } from "./review";
 
 const before: Board = parseFen(START_FEN).board;
@@ -233,5 +233,51 @@ describe("다시 볼 수 고르기", () => {
   it("고를 수 있는 것보다 적게 달라고 해도 탈이 없다", () => {
     expect(pickDeepMoves([0.5, 0.4], 0)).toEqual([]);
     expect(pickDeepMoves([], 5)).toEqual([]);
+  });
+});
+
+/*
+ * 정확도
+ *
+ * 숫자가 어디서 왔는지는 docs/DECISIONS.md(2026-10-16)에 있다. 여기서는 **그 곡선이
+ * 우리 등급 경계와 맞는지**와 **조화평균이 실수를 묻지 않는지**를 못 박는다.
+ * 상수(0.04354)를 건드리면 아래 둘이 빨간불이 된다.
+ */
+describe("정확도", () => {
+  const 판 = (쪽: "cho" | "han", ...하락: number[]): ReviewedMove[] =>
+    하락.map((winDrop, index) => ({ index, mover: 쪽, winDrop }) as ReviewedMove);
+
+  it("한 수도 안 흘리면 화면에 100 으로 뜬다", () => {
+    // 상수가 103.1668 - 3.1669 라 딱 100 이 아니라 99.9999 다. 화면은 정수로 적으니
+    // 100% 로 보인다. 소수점을 띄우기로 바꾸면 '99.9999%' 가 나온다.
+    const 값 = accuracyOf(판("cho", 0, 0, 0), "cho") as number;
+    expect(값).toBeCloseTo(99.9999, 4);
+    expect(Math.round(값)).toBe(100);
+  });
+
+  it("아쉬운 수 경계(5%p)가 80 쯤이다", () => {
+    expect(accuracyOf(판("cho", 0.05), "cho")).toBeCloseTo(79.8, 1);
+  });
+
+  it("큰 실수 경계(20%p)가 40 쯤이다", () => {
+    expect(accuracyOf(판("cho", 0.2), "cho")).toBeCloseTo(40.0, 1);
+  });
+
+  it("내가 둔 수만 센다 — 상대가 크게 흘려도 내 숫자는 그대로다", () => {
+    const 내것만 = accuracyOf(판("cho", 0, 0), "cho");
+    const 섞임 = accuracyOf([...판("cho", 0, 0), ...판("han", 0.5, 0.5)], "cho");
+    expect(섞임).toBeCloseTo(내것만 as number, 6);
+  });
+
+  it("그 쪽이 둔 수가 없으면 null 이다", () => {
+    expect(accuracyOf(판("han", 0.1), "cho")).toBeNull();
+  });
+
+  it("조화평균이라 실수 하나가 단순평균보다 훨씬 많이 끌어내린다", () => {
+    // 최선수 아홉에 40%p 흘린 수 하나. 그 한 수의 정확도는 14.9 다.
+    // 단순평균이면 (100*9 + 14.9) / 10 = 91.5 로 실수가 거의 안 보인다.
+    const 조화 = accuracyOf(판("cho", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.4), "cho");
+    expect(조화).toBeCloseTo(63.7, 1);
+    expect(조화 as number).toBeLessThan(70);
   });
 });
