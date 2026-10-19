@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import type { Plugin } from "vite";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -97,6 +98,46 @@ const devHeaders = {
  * 안 띄워 두면 /api/ 요청만 실패한다. 측정은 실패해도 앱을 깨뜨리지 않으므로 화면은
  * 그대로 돈다 - 그래서 **안 띄운 줄 모르고 "기록이 안 온다" 고 헤맬 수 있다.**
  */
+/*
+ * 폴더 주소(/privacy/)를 그 안의 index.html 로 바꾼다. 개발 서버와 미리보기 둘 다.
+ *
+ * Vite 는 파일을 내보낼 때 확장자 추측을 꺼 둔다(extensions: []). 그래서 /privacy/ 를
+ * privacy/index.html 로 찾아 주지 않고, 못 찾은 주소는 SPA 되돌림이 받아서 **앱이 뜬다.**
+ * vercel.json 에는 그 되돌림이 없어 배포본은 진짜 파일을 준다 - 그래서 여기서만 다르게
+ * 보인다.
+ *
+ * 2026-10-19 에 이것 때문에 "개인정보처리방침 링크가 홈으로 간다" 고 잘못 읽었다.
+ * 로컬에서 본 것이 배포본의 증거가 되려면 둘이 같아야 한다. 미리보기까지 거는 까닭도
+ * 같다 - 거기가 배포본과 같은 번들로 확인하는 자리다.
+ *
+ * 파일이 있는지는 보지 않는다 - 그러려면 node 타입을 들여야 하는데, 그러면 src 에서
+ * setTimeout 의 반환형이 number 에서 NodeJS.Timeout 으로 바뀐다. 볼 필요도 없다.
+ * /없는폴더/index.html 은 어차피 없어서 지금과 똑같이 SPA 되돌림이 받는다.
+ */
+function 폴더주소(req: { url?: string }, _res: unknown, next: () => void) {
+  const 주소 = req.url;
+  if (주소) {
+    const 길 = 주소.split("?")[0];
+    // '..' 이 섞인 주소는 건드리지 않는다.
+    if (길.length > 1 && 길.endsWith("/") && !길.includes("..")) {
+      req.url = 길 + "index.html" + 주소.slice(길.length);
+    }
+  }
+  next();
+}
+
+function 폴더주소플러그인(): Plugin {
+  return {
+    name: "janggi-folder-index",
+    configureServer(server) {
+      server.middlewares.use(폴더주소);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(폴더주소);
+    },
+  };
+}
+
 const API_PROXY = {
   "/api": {
     target: "http://localhost:8080",
@@ -106,7 +147,7 @@ const API_PROXY = {
 };
 
 export default defineConfig(({ command, isPreview }) => ({
-  plugins: [react()],
+  plugins: [react(), 폴더주소플러그인()],
   // 빌드한 index.html 에는 표식을 남기지 않는다. 개발 서버일 때만 붙인다.
   html: command === "serve" && !isPreview ? { cspNonce: DEV_NONCE } : undefined,
   server: { headers: devHeaders, proxy: API_PROXY },
