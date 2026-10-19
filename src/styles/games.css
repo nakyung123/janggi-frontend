@@ -95,6 +95,32 @@
 }
 
 /*
+ * 개인정보처리방침 줄. **로그인 줄 안에 넣지 않는다** - 폭 320 에서 그 줄은 글과
+ * 단추로 이미 꽉 차서 한 칸만 더 들어가도 넘친다. 아래 줄로 내린다.
+ */
+.games-privacy {
+  margin: -8px 0 16px;
+  font-size: var(--fs-base);
+}
+
+/*
+ * **파랑을 쓰지 않는다.** base.css 머리에 적힌 대로 파랑(--accent)은 판 위 엔진
+ * 화살표와 포커스 표시에만 쓰는 색이다. 색을 안 주면 브라우저 기본 파랑(#0000EE)이
+ * 나오는데 그건 토큰도 아니다 - 이 앱에 전역 a 규칙이 없어서 그렇다.
+ * 링크라는 것은 밑줄이 말한다.
+ */
+.games-privacy a {
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+@media (hover: hover) {
+  .games-privacy a:hover {
+    color: var(--text);
+  }
+}
+
+/*
  * 탈퇴를 누르면 펴지는 줄. 되돌릴 수 없어 보이는 일이라 한 번 더 묻는다.
  * 폭 320 에서도 글이 넘치지 않게 단추를 아래 줄로 내린다.
  */
