@@ -2,7 +2,7 @@
   "name": "janggi-frontend",
   "private": true,
   "license": "GPL-3.0-or-later",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "장기 AI - 브라우저에서 Fairy-Stockfish 와 한 판 두고 복기하는 장기",
   "scripts": {
