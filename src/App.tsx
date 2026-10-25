@@ -876,6 +876,10 @@ export default function App() {
         problems={problems}
         spoken={spoken}
         onUpdates={() => setUpdatesOpen(true)}
+        onNotice={() => setNoticeOpen(true)}
+        loggedIn={server.loggedIn}
+        busy={server.busy}
+        onSignOut={server.signOut}
       />
       {/* 처음부터 있어야 새 말을 읽어 준다. 내용이 없어도 요소는 남겨 둔다. */}
       <p className="sr-only" role="status">

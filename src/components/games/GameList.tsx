@@ -158,11 +158,12 @@ export function GameList(props: Props) {
       </div>
 
       {/*
-        로그인 줄. **머리말이 아니라 여기 둔다** - 폭 320 에서 앱 이름 줄에 자리가 없고,
-        로그인이 하는 일(기보를 기기 밖에도 남기기)이 이 탭의 일이다. 이메일과 이름은
-        보이지 않는다. 로그인됨 표시만 둔다.
+        로그인 줄. 넓은 화면에서는 로그인이 여기에만 있다 - 로그인이 하는 일(기보를 기기
+        밖에도 남기기)이 이 탭의 일이다. 폭 900 이하에서는 헤더 오른쪽에 로그인이 있으므로
+        로그인 전의 이 줄은 통째로 숨긴다(games.css). 이메일과 이름은 보이지 않는다.
+        로그인됨 표시만 둔다.
       */}
-      <div className="games-login">
+      <div className={"games-login" + (server.loggedIn === false ? " signed-out" : "")}>
         {server.loggedIn === null ? (
           <span className="games-who">로그인 상태를 확인하는 중…</span>
         ) : server.loggedIn ? (
@@ -181,16 +182,13 @@ export function GameList(props: Props) {
             </button>
           </>
         ) : (
-          <>
-            <span className="games-who">기보가 이 기기에만 남습니다</span>
-            {/*
-              단추가 아니라 링크다. 구글 동의 화면을 사람이 봐야 하므로 쪽 전체가 옮겨갔다
-              돌아온다 - fetch 로는 안 되는 일이다.
-            */}
-            <a className="games-signin" href={LOGIN_PATH}>
-              구글로 로그인
-            </a>
-          </>
+          /*
+            단추가 아니라 링크다. 구글 동의 화면을 사람이 봐야 하므로 쪽 전체가 옮겨갔다
+            돌아온다 - fetch 로는 안 되는 일이다.
+          */
+          <a className="games-signin" href={LOGIN_PATH}>
+            구글로 로그인
+          </a>
         )}
       </div>
 

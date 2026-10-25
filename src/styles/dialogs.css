@@ -88,9 +88,133 @@
   }
 }
 
+/* --- 메뉴 칸: 폰의 ☰ ---------------------------------------------------- */
+
+/*
+ * 왼쪽에서 나오는 칸(MenuDrawer.tsx). 바탕은 가운데 창과 같은 딤드이고, 칸은 카드색이다.
+ * 닫기 단추가 ☰ 가 있던 자리에 그대로 서게 맞춘다 - 위 4(.app 의 위 여백), 왼쪽 2
+ * (여백 12 에서 ☰ 를 10 내민 자리). 누른 자리에서 바로 닫을 수 있다.
+ */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.32);
+  animation: dialog-in 0.14s ease-out;
+}
+
+.drawer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(280px, 85vw);
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0 16px;
+  overflow-y: auto;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  box-shadow: var(--shadow-board);
+  animation: drawer-in 0.18s ease-out;
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding-left: 2px;
+  margin-bottom: 8px;
+}
+
+.drawer-close {
+  width: 40px;
+  padding: 0;
+}
+
+.drawer-name {
+  font-size: var(--fs-title);
+  font-weight: 700;
+}
+
+.drawer-modes {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+/*
+ * 항목은 칸 폭을 꽉 채우는 줄이다. 글자 왼쪽 끝은 12 - 닫기 아이콘의 왼쪽 끝,
+ * 그리고 헤더에서 판의 왼쪽 끝과 같은 줄이다.
+ */
+.drawer-item,
+.drawer-sub {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  padding: 0 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  text-align: left;
+  text-decoration: none;
+}
+
+.drawer-item {
+  min-height: 48px;
+  font-size: var(--fs-base);
+  color: var(--text);
+}
+
+/* 지금 탭. 분절 버튼의 고른 칸처럼 바탕과 굵기가 함께 말한다. */
+.drawer-item.active {
+  background: var(--panel-2);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.drawer-sub {
+  min-height: 44px;
+  color: var(--text-sub);
+  font-weight: 400;
+}
+
+@media (hover: hover) {
+  .drawer-item:hover:not(:disabled),
+  .drawer-sub:hover {
+    background: var(--panel-2);
+  }
+}
+
+/* 손가락으로 누를 때 ☰ 는 44 이고 12 내밀어 왼쪽 0 에 선다. 닫기도 같은 자리에. */
+@media (pointer: coarse) {
+  .drawer-head {
+    padding-left: 0;
+  }
+
+  .drawer-close {
+    width: 44px;
+    min-height: 44px;
+  }
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
 /* 동작 줄이기를 켠 사람에게는 나타나는 것만 보여주고 움직이지 않는다. */
 @media (prefers-reduced-motion: reduce) {
-  .dialog-backdrop {
+  .dialog-backdrop,
+  .drawer-backdrop,
+  .drawer {
     animation: none;
   }
 }
