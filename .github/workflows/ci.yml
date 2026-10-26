@@ -16,9 +16,12 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Action 은 태그가 아니라 커밋으로 부른다. 태그는 주인이, 또는 그 계정을 턴 사람이
+      # 다른 코드로 옮길 수 있다(2025-03 tj-actions/changed-files). 판을 올릴 때는 해시와
+      # 뒤의 판 주석을 같이 바꾼다.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           # Vercel 이 쓰는 것과 맞춘다. 다르면 여기서 통과한 것이 배포에서 깨질 수 있다.
           node-version: 24
