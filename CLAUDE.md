@@ -28,10 +28,12 @@ npx tsc -b          # 타입. 린트 대신이다 (noUnusedLocals 켜짐)
 npx vitest run      # 테스트
 npm run build       # 빌드
 npx playwright test # E2E. 진짜 엔진으로 한 판 두고 복기까지(e2e/). 4173 포트를 비워 둔다
+npx playwright test -c playwright.server.config.ts # 로그인·기보 E2E. Docker·Java 21·백엔드 jar 가 있어야 한다(머리 주석)
 PAT=$(printf '\xef\xbf\xbd'); git grep -nF "$PAT" -- . && echo "깨진 글자 있음!" || echo "깨끗"
 ```
 
-- 넷 다 올리기 전에 돌린다. CI(`.github/workflows/ci.yml`)도 같은 넷을 본다. Vercel 은 테스트를 돌리지 않는다.
+- 위의 넷(타입·테스트·빌드·E2E)은 올리기 전에 돌린다. CI(`.github/workflows/ci.yml`)도 같은 넷을 본다. Vercel 은 테스트를 돌리지 않는다.
+- 로그인·기보 E2E 는 로그인·기보·`server/` 를 바꿀 때 돌린다. CI 는 늘 돌린다(백엔드 main 을 받아서).
 - 깨진 글자 검사를 `$'\ufffd'` 로 쓰면 이 셸에서 아무것도 찾지 못하고 "깨끗" 이라고 한다.
 
 ## 구조

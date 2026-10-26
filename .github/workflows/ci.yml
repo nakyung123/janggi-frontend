@@ -119,3 +119,82 @@ jobs:
             test-results/
             playwright-report/
           retention-days: 14
+
+  # 로그인·기보 올리기 E2E(e2e/server-flow.spec.ts). 백엔드 저장소(공개)를 받아 jar 로 띄우고,
+  # Postgres 는 서비스로, 구글은 가짜(e2e/fake-google.mjs)로 둔다. 운영 DB·운영 서버에 닿지 않는다.
+  # 백엔드는 main 의 최신 코드를 쓴다 - 둘이 지금 맞물리는지를 보는 자리다.
+  e2e-server:
+    runs-on: ubuntu-latest
+    # 새로 만든 E2E 라 간헐 실패가 줄 때까지 CI 전체를 막지 않는다. 연속 10번 통과하면 이 줄을 지운다.
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: e2e
+          POSTGRES_DB: e2e
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d e2e"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      # Postgres 는 위 서비스가 띄웠다. 설정이 Docker 로 또 띄우지 않게 한다.
+      E2E_DB_READY: "1"
+      BACKEND_JAR: backend/build/libs/janggi-backend.jar
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: nakyung123/janggi-backend
+          path: backend
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+          cache-dependency-path: |
+            backend/*.gradle*
+            backend/gradle/wrapper/gradle-wrapper.properties
+
+      - name: 백엔드 jar 빌드
+        working-directory: backend
+        run: |
+          ./gradlew --no-daemon bootJar
+          # 판 번호가 붙은 이름을 정해진 이름으로 옮긴다. 설정이 이 경로를 본다(BACKEND_JAR).
+          mv build/libs/janggi-backend-*[0-9].jar build/libs/janggi-backend.jar
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.cache/janggi-engine
+          key: janggi-engine-${{ hashFiles('scripts/fetch-engine.mjs') }}
+
+      - name: 엔진 파일 준비
+        run: node scripts/fetch-engine.mjs
+
+      - name: 브라우저 설치
+        run: npx playwright install --with-deps chromium
+
+      - name: 로그인·기보 E2E
+        run: npx playwright test -c playwright.server.config.ts
+
+      - name: 실패 기록 올리기
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-server-failure
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 14

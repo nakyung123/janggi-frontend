@@ -21,6 +21,8 @@ const phone320 = { ...devices["Desktop Chrome"], viewport: { width: 320, height:
 
 export default defineConfig<IsolationOption>({
   testDir: "e2e",
+  // 로그인·기보 올리기 E2E 는 백엔드·DB·가짜 구글이 있어야 해서 따로 돈다(playwright.server.config.ts).
+  testIgnore: "server-flow.spec.ts",
   // 엔진이 수를 두고 복기를 도는 시간까지 넣는다.
   timeout: 120_000,
   // CI 에서 한 번 다시 돈다. 다시 돌아 통과한 것은 보고서에 flaky 로 남는다(간헐 실패).

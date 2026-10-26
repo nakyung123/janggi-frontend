@@ -127,6 +127,42 @@ export class AppPage {
     return this.page.getByRole("button", { name: "다시 복기" });
   }
 
+  // --- 로그인과 기보 목록 (e2e/server-flow.spec.ts) --------------------------
+
+  /** 폰 헤더의 로그인. 로그인 전에만 선다. 쪽 전체가 구글로 갔다가 돌아온다. */
+  get login() {
+    return this.page.getByRole("link", { name: "로그인", exact: true });
+  }
+  /** 폰 헤더의 로그아웃. 로그인된 뒤에만 선다. */
+  get logout() {
+    return this.page.getByRole("banner").getByRole("button", { name: "로그아웃" });
+  }
+
+  /** ☰ 메뉴에서 기보 탭으로 간다. 폰에서는 모드 탭이 메뉴 안에 있다. */
+  async openGamesTab() {
+    await this.page.getByRole("button", { name: "메뉴 열기" }).click();
+    await this.page.getByRole("navigation", { name: "모드" }).getByRole("button", { name: "기보" }).click();
+  }
+
+  /** 연 판에서 목록으로 돌아간다. */
+  get backToList() {
+    return this.page.getByRole("button", { name: "목록으로" });
+  }
+
+  /** 기보 목록의 판 카드 */
+  get gameCards() {
+    return this.page.getByRole("region", { name: "지난 판" }).getByRole("listitem");
+  }
+  get emptyList() {
+    return this.page.getByText("아직 끝난 판이 없습니다");
+  }
+
+  /** 기보 탭의 탈퇴. 묻는 줄에서 한 번 더 누른다. */
+  async withdraw() {
+    await this.page.getByRole("button", { name: "탈퇴", exact: true }).click();
+    await this.page.getByRole("group", { name: "탈퇴 확인" }).getByRole("button", { name: "탈퇴하기" }).click();
+  }
+
   async noHorizontalScroll() {
     const over = await this.page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     expect(over, "가로 스크롤이 없다").toBe(false);
