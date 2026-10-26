@@ -29,6 +29,7 @@ npx vitest run      # 테스트
 npm run build       # 빌드
 npx playwright test # E2E. 진짜 엔진으로 한 판 두고 복기까지(e2e/). 4173 포트를 비워 둔다
 npx playwright test -c playwright.server.config.ts # 로그인·기보 E2E. Docker·Java 21·백엔드 jar 가 있어야 한다(머리 주석)
+node scripts/weekly.mjs # 주간 지표. 최근 7일과 그 앞 7일(운영 통계, 토큰은 STATS_TOKEN 또는 gcloud)
 PAT=$(printf '\xef\xbf\xbd'); git grep -nF "$PAT" -- . && echo "깨진 글자 있음!" || echo "깨끗"
 ```
 
