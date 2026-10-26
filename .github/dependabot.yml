@@ -1,0 +1,30 @@
+# 판 올리기 PR 을 주 1회 만든다. 자동으로 합치지 않는다 - CI 결과를 보고 사람이 합친다.
+#
+# cooldown: 나온 지 7일이 안 된 판은 PR 을 만들지 않는다. 공급망 공격은 대부분 며칠 안에
+# 발견되어 내려진다.
+#
+# cooldown 과 open-pull-requests-limit 은 일반 판 올리기에만 걸린다. 보안 업데이트 PR 은
+# 기다리지 않고, GitHub 이 정한 별도 한도(10개)를 따른다(GitHub 의 dependabot 설정 문서).
+# 한도는 항목마다 따로 걸려서, 둘을 합쳐 3개가 되게 나눴다.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "의존성"
+
+  # .github/workflows/ 의 Action. 커밋 해시로 고정해 두었으므로 판은 이 PR 로만 올린다.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 1
+    commit-message:
+      prefix: "CI"
