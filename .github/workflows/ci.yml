@@ -35,6 +35,11 @@ jobs:
       - name: 테스트
         run: npx vitest run
 
+      # 보내는 측정 이벤트 이름이 서버(janggi-backend main)의 목록에 다 있는지 본다. 서버가
+      # 모르는 이름은 400 으로 거절되고, 답을 안 읽으므로 기록만 조용히 버려진다.
+      - name: 이벤트 이름이 서버 목록에 있는지
+        run: node scripts/check-event-names.mjs
+
       # `npm run build` 가 아니라 `vite build` 를 직접 부른다.
       #
       # `npm run build` 는 prebuild 로 scripts/fetch-engine.mjs 를 돌리는데, 그것이
