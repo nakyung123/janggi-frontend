@@ -9,7 +9,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Board as BoardMap, Square } from "../../janggi/board";
 import { FILES, RANKS, fileIdxOf, rankOf, sq } from "../../janggi/board";
-import { pieceInfo } from "../../janggi/pieces";
+import { toJanggiCoord } from "../../janggi/notation";
+import { SIDE_LABEL, pieceInfo, sideOf } from "../../janggi/pieces";
 import type { PieceChar } from "../../janggi/pieces";
 import { CheckCallout } from "./CheckCallout";
 import { PieceBody, PieceDefs } from "./PieceGlyph";
@@ -312,6 +313,22 @@ export function Board(props: BoardProps) {
     for (let f = 0; f < FILES; f++) squares.push(sq(f, r));
   }
 
+  /** 화면에 보이는 가로줄. 위에서 아래, 줄 안에서는 왼쪽에서 오른쪽. */
+  const displayRows: Square[][] = [];
+  for (let y = 0; y < RANKS; y++) {
+    const rank = flipped ? y + 1 : RANKS - y;
+    const row: Square[] = [];
+    for (let x = 0; x < FILES; x++) row.push(sq(flipped ? FILES - 1 - x : x, rank));
+    displayRows.push(row);
+  }
+
+  /** 교차점 이름. 기물이 있으면 "73 초 졸", 없으면 "63". */
+  const cellName = (square: Square) => {
+    const piece = board[square];
+    const coord = toJanggiCoord(square);
+    return piece ? `${coord} ${SIDE_LABEL[sideOf(piece)]} ${pieceInfo(piece).name}` : coord;
+  };
+
   const arrows = [
     bestMove && { key: "best", cls: "best-arrow", m: bestMove, head: "arrowBest" },
   ].filter(Boolean) as {
@@ -462,24 +479,38 @@ export function Board(props: BoardProps) {
         );
       })}
 
-      {/* 클릭 판정용 투명 영역. 기물이 없는 교차점도 집을 수 있어야 한다. */}
-      {squares.map((s) => {
-        const p = posOf(s);
-        return (
-          <circle
-            key={"hit" + s}
-            cx={p.x}
-            cy={p.y}
-            r={CELL * 0.46}
-            fill="transparent"
-            data-square={s}
-            className={targetSet.has(s) ? "hit active" : "hit"}
-            onPointerUp={() => {
-              if (!drag) onSquareClick(s);
-            }}
-          />
-        );
-      })}
+      {/*
+        클릭 판정용 투명 영역. 기물이 없는 교차점도 집을 수 있어야 한다.
+
+        교차점마다 이름을 단다(기보 좌표 + 기물, "73 초 졸"). E2E 가 요소를 역할과 이름으로
+        찾아서, 이것이 없으면 사람의 수를 둘 수 없었다. 가로줄은 화면에 보이는 위에서
+        아래 순서다(판을 뒤집으면 같이 뒤집힌다).
+      */}
+      <g role="grid" aria-label="장기판">
+        {displayRows.map((row, y) => (
+          <g role="row" key={"row" + y}>
+            {row.map((s) => {
+              const p = posOf(s);
+              return (
+                <circle
+                  key={"hit" + s}
+                  role="gridcell"
+                  aria-label={cellName(s)}
+                  cx={p.x}
+                  cy={p.y}
+                  r={CELL * 0.46}
+                  fill="transparent"
+                  data-square={s}
+                  className={targetSet.has(s) ? "hit active" : "hit"}
+                  onPointerUp={() => {
+                    if (!drag) onSquareClick(s);
+                  }}
+                />
+              );
+            })}
+          </g>
+        ))}
+      </g>
 
       {/* 날아오는 동안 잡힌 기물은 도착 자리에 남아 있다가 사라진다. */}
       {flyMove?.captured &&

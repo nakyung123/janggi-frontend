@@ -8,9 +8,10 @@
 //
 // Given 폰 폭 320, 배포용 빌드, 진짜 엔진
 // When  한을 잡는다          Then 엔진(초)이 첫 수를 두고 내 차례가 된다
+// When  병(43)을 53 으로     Then 병이 옮겨지고, 엔진이 다시 두고 내 차례가 된다
 // When  한수쉼을 한다        Then 엔진이 다시 두고 내 차례가 된다
 // When  기권한다             Then 결과 창이 뜬다
-// When  기보를 보고 복기한다 Then 복기가 끝나 수마다 설명이 붙고, 수는 3개다
+// When  기보를 보고 복기한다 Then 복기가 끝나 수마다 설명이 붙고, 수는 5개다
 // 내내: 격리 여부가 프로젝트와 같고, 잡히지 않은 스크립트 오류가 없고, 가로 스크롤이 없다.
 
 import { expect } from "@playwright/test";
@@ -36,6 +37,14 @@ test("한 판을 두고 기권한 뒤 복기까지 간다", async ({ page, isola
     await expect(app.undo, "수가 하나 생겨 무를 수 있다").toBeEnabled();
   });
 
+  await test.step("병을 한 칸 올리면 엔진이 다시 둔다", async () => {
+    await app.tap("43 한 병");
+    await app.tap("53");
+    await expect(app.cell("53 한 병"), "병이 53 에 놓인다").toBeVisible();
+    await expect(app.cell("43"), "43 은 비었다").toBeVisible();
+    await app.waitMyTurn();
+  });
+
   await test.step("한수쉼을 하면 엔진이 다시 둔다", async () => {
     await app.pass.click();
     await app.waitMyTurn();
@@ -49,8 +58,8 @@ test("한 판을 두고 기권한 뒤 복기까지 간다", async ({ page, isola
     await app.reviewDepth("빠름").click();
     await app.startReview.click();
     await expect(app.reviewAgain, "복기가 끝난다").toBeVisible({ timeout: ENGINE_WAIT });
-    // 엔진의 수, 나의 한수쉼, 엔진의 수
-    await expect(page.getByText("3/3수")).toBeVisible();
+    // 엔진의 수, 나의 병, 엔진의 수, 나의 한수쉼, 엔진의 수
+    await expect(page.getByText("5/5수")).toBeVisible();
     await app.noHorizontalScroll();
   });
 

@@ -10,7 +10,7 @@
 // 엔진 응답·React 갱신과 얽혀 멈춘 것처럼 보이기 쉽다. 한 판이 1~2초 걸린다.
 
 import "./test/browser";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { positionKey } from "./engine/types";
@@ -149,6 +149,34 @@ describe("엔진과 한 판", () => {
  * 대신 **들어오는 길이 다른** 둘을 고른다. 외통은 엔진이 알려 준 국면에서 서고,
  * 시간패는 국면과 무관하게 시계에서 선다. 둘은 코드가 갈린다.
  */
+describe("판의 칸 이름", () => {
+  // E2E 가 칸을 역할과 이름으로 찾아 사람의 수를 둔다(e2e/app-page.ts). 이름은 기보 좌표 + 기물이다.
+  const grid = () => screen.getByRole("grid", { name: "장기판" });
+  const cells = () => within(grid()).getAllByRole("gridcell");
+
+  it("교차점 90개에 좌표와 기물로 이름이 붙고, 수를 두면 바뀐다", async () => {
+    await start();
+    expect(within(grid()).getAllByRole("row")).toHaveLength(10);
+    expect(cells()).toHaveLength(90);
+    // c4 는 초의 졸, c5 는 빈 자리다. 기보 좌표로 73, 63 이다.
+    expect(within(grid()).getByRole("gridcell", { name: "73 초 졸" })).toBeTruthy();
+    expect(within(grid()).getByRole("gridcell", { name: "63" })).toBeTruthy();
+
+    drag("c4", "c5");
+    await engineReply(1);
+    expect(within(grid()).getByRole("gridcell", { name: "63 초 졸" })).toBeTruthy();
+    expect(within(grid()).getByRole("gridcell", { name: "73" })).toBeTruthy();
+  });
+
+  it("가로줄은 화면에 보이는 위에서 아래 순서이고, 판을 뒤집으면 같이 뒤집힌다", async () => {
+    await start();
+    // 뒤집지 않은 판의 왼쪽 위는 a10(기보 좌표 11), 뒤집은 판은 i1(09)이다.
+    expect(cells()[0].getAttribute("aria-label")).toMatch(/^11( |$)/);
+    fireEvent.click(screen.getByRole("button", { name: "판 뒤집기" }));
+    expect(cells()[0].getAttribute("aria-label")).toMatch(/^09( |$)/);
+  });
+});
+
 describe("판이 끝나면", () => {
   const 기권버튼 = () => screen.getByRole("button", { name: "기권" }) as HTMLButtonElement;
   const 결과창 = () => document.querySelector(".dialog.result");

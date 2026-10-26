@@ -1,8 +1,7 @@
 // 화면 요소를 찾는 곳. 화면이 바뀌면 여기만 고친다.
 //
 // 요소는 역할과 이름으로 찾는다. 테스트 전용 속성을 서비스 코드에 넣지 않는다.
-// 판(SVG)의 기물은 역할도 이름도 없어서 여기서 찾지 않는다 - 그것은 접근성 결함으로
-// 따로 적어 두었다. 그래서 수는 엔진이 두고, 사람은 한수쉼만 한다.
+// 판의 교차점은 gridcell 이고 이름은 기보 좌표 + 기물이다(Board.tsx).
 
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
 
@@ -53,6 +52,24 @@ export class AppPage {
     await expect(this.newGame.or(failed)).toBeVisible({ timeout: ENGINE_WAIT });
     await expect(failed, "엔진을 띄우지 못했다는 글이 없다").toBeHidden();
     await expect(this.newGame, "엔진이 준비되어 대국 패널이 선다").toBeVisible();
+  }
+
+  /** 판의 교차점. 이름은 기보 좌표 + 기물("43 한 병"), 빈 자리는 좌표만("53"). */
+  cell(name: string): Locator {
+    return this.page.getByRole("grid", { name: "장기판" }).getByRole("gridcell", { name, exact: true });
+  }
+
+  /**
+   * 교차점을 누른다. 사람이 누르는 그대로 그 자리 가운데를 마우스로 누른다.
+   *
+   * locator.click() 을 쓰지 않는 까닭 - 기물이 있는 자리는 기물 그림이 교차점 위에 그려져
+   * 있어서, 누르면 기물이 받는다(판이 그렇게 만들어졌다). click() 은 그것을 "다른 요소가
+   * 가로챈다" 로 보고 기다리기만 한다. 우회해 누르는 것(force)이 아니라 사람과 같은 자리를 누른다.
+   */
+  async tap(name: string) {
+    const box = await this.cell(name).boundingBox();
+    expect(box, `교차점 "${name}" 이 화면에 있다`).not.toBeNull();
+    await this.page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
   }
 
   /** 대국 패널의 "내가 잡을 쪽" */
