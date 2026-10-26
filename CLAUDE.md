@@ -27,6 +27,7 @@ Vercel 에 배포한다. 측정·로그인·기보 저장은 백엔드(내 컴�
 npx tsc -b          # 타입. 린트 대신이다 (noUnusedLocals 켜짐)
 npx vitest run      # 테스트
 npm run build       # 빌드
+npx playwright test # E2E. 진짜 엔진으로 한 판 두고 복기까지(e2e/). 4173 포트를 비워 둔다
 PAT=$(printf '\xef\xbf\xbd'); git grep -nF "$PAT" -- . && echo "깨진 글자 있음!" || echo "깨끗"
 ```
 

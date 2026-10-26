@@ -19,6 +19,8 @@ public/licenses/
 
 # 테스트 도구 산출물
 .playwright-mcp/
+test-results/
+playwright-report/
 
 # 로그 / 캐시
 *.log

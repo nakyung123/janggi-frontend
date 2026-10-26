@@ -75,3 +75,47 @@ jobs:
             exit 1
           fi
           echo "깨끗"
+
+  # 진짜 엔진으로 한 판을 두고 복기까지 간다(e2e/core-flow.spec.ts). 단위 테스트는 엔진을
+  # 가짜로 바꿔 끼우므로, 엔진(WASM)이 브라우저에서 뜨는지는 여기서만 본다.
+  e2e:
+    runs-on: ubuntu-latest
+    # 새로 만든 E2E 라 간헐 실패가 줄 때까지 이 작업이 실패해도 CI 전체를 막지 않는다.
+    # 작업 목록에는 실패로 보인다. 연속 10번 통과하면 이 줄을 지운다.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # 엔진 신경망(11MB)은 구글 드라이브에서 받는다. 드라이브는 데이터센터에서 자주 막히므로
+      # 한 번 받아 검사를 마친 것(fetch-engine.mjs 의 CACHE_DIR)을 캐시에 두고 꺼내 쓴다.
+      # 신경망 이름이 fetch-engine.mjs 에 있어서, 그 파일이 바뀔 때만 새로 받는다.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.cache/janggi-engine
+          key: janggi-engine-${{ hashFiles('scripts/fetch-engine.mjs') }}
+
+      - name: 엔진 파일 준비
+        run: node scripts/fetch-engine.mjs
+
+      - name: 브라우저 설치
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E
+        run: npx playwright test
+
+      - name: 실패 기록 올리기
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-failure
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 14
