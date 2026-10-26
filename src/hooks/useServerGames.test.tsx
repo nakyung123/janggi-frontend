@@ -212,9 +212,11 @@ describe("어긋났을 때", () => {
     rerender({ games: [판("가"), 판("나"), 판("다")] });
 
     await waitFor(() => expect(올린것()).toHaveLength(3));
-    expect(겹친적있다).toBe(false);
     // 셋 다 적혀야 한다. 하나라도 빠지면 화면이 거짓말을 한다.
-    expect(["가", "나", "다"].every((id) => result.current.onServer(id))).toBe(true);
+    // 셋째 올리기는 불린 뒤 10ms 가 지나야 끝나므로 적힐 때까지 기다린다. 불린 횟수만 보고
+    // 바로 보면, 컴퓨터가 바쁠 때 그 틈에 걸려 가끔 실패했다(2026-10-26, 4번 중 2번).
+    await waitFor(() => expect(["가", "나", "다"].every((id) => result.current.onServer(id))).toBe(true));
+    expect(겹친적있다).toBe(false);
   });
 });
 
