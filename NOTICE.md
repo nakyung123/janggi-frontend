@@ -11,6 +11,7 @@
 - 저작자: Fabian Fichter, Stockfish 개발자들
 - 라이선스: GPL v3
 - 출처: [Fairy-Stockfish](https://github.com/fairy-stockfish/Fairy-Stockfish), WebAssembly 빌드는 [fairy-stockfish.wasm](https://github.com/gbtami/fairy-stockfish.wasm)
+- 고친 빌드: 안드로이드의 앱 안 브라우저처럼 여러 스레드를 쓸 수 없는 곳에서는 스레드를 뺀 빌드를 씁니다. 고친 내용과 빌드 방법: [engine-single](https://github.com/nakyung123/janggi-frontend/tree/main/engine-single)
 
 ## 신경망 - janggi-9991472750de.nnue
 
