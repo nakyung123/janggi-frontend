@@ -999,7 +999,7 @@ export default function App() {
                 <ReviewPanel
                   moveCount={openGame.history.length - 1}
                   depthId={reviewDepthId}
-                  threads={prefs.threads}
+                  threads={engine?.singleThread ? 1 : prefs.threads}
                   onDepth={setReviewDepthId}
                   running={review.running}
                   progress={review.progress}

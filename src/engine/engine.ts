@@ -19,6 +19,13 @@ import type {
 import { noteTrouble } from "../report/errors";
 import { positionCommand } from "./types";
 import { parseInfo, parsePerftMoves } from "./uci";
+import { WorkerEngine } from "./workerEngine";
+// 격리가 안 되는 브라우저에서 쓰는 단일 스레드 엔진. 빌드가 이름에 내용 해시를 붙여 내보낸다.
+// worker.js 는 작아서 그냥 두면 번들 안에 data: 주소로 들어간다. CSP worker-src 'self' 가
+// 그 주소를 막으므로 no-inline 으로 파일로 내보낸다.
+import singleWorkerUrl from "../../engine-single/worker.js?url&no-inline";
+import singleGlueUrl from "../../engine-single/stockfish.js?url";
+import singleWasmUrl from "../../engine-single/stockfish.wasm?url";
 
 const ENGINE_BASE = "/engine/";
 const NNUE_FILE = "janggi-9991472750de.nnue";
@@ -47,10 +54,15 @@ const NNUE_MIN_BYTES = 10_000_000;
 
 type Listener = (line: string) => void;
 
-interface RawEngine {
+export interface RawEngine {
   postMessage(cmd: string): void;
   addMessageListener(fn: Listener): void;
   FS: { writeFile(path: string, data: Uint8Array): void };
+  /**
+   * 단일 스레드 엔진(workerEngine.ts)에만 있다. 생각하는 중에 stop 이 닿지 않아서, 멈추려면
+   * 엔진을 새로 띄운다.
+   */
+  restart?(): void;
 }
 
 declare global {
@@ -143,6 +155,32 @@ function loadEngineScript(): Promise<void> {
   });
 }
 
+/** 스레드를 쓰는 엔진. 격리된 브라우저에서만 뜬다. */
+async function loadThreaded(onProgress: (p: LoadProgress) => void): Promise<RawEngine> {
+  await loadEngineScript();
+  const factory = window.Stockfish;
+  if (!factory) throw new Error("Stockfish 로더를 찾지 못했습니다.");
+
+  const wasmBinary = await fetchWithProgress(
+    ENGINE_BASE + "stockfish.wasm",
+    "엔진",
+    onProgress
+  );
+  onProgress({ stage: "엔진 초기화", loaded: 0, total: 0 });
+  return factory({ wasmBinary });
+}
+
+/** 단일 스레드 엔진. Web Worker 안에서 돈다(workerEngine.ts). */
+async function loadSingleThread(onProgress: (p: LoadProgress) => void): Promise<RawEngine> {
+  const wasmBinary = await fetchWithProgress(singleWasmUrl, "엔진", onProgress);
+  onProgress({ stage: "엔진 초기화", loaded: 0, total: 0 });
+  return WorkerEngine.create({
+    workerUrl: singleWorkerUrl,
+    glueUrl: singleGlueUrl,
+    wasmBinary,
+  });
+}
+
 export class JanggiEngine {
   private raw: RawEngine;
   private listeners = new Set<Listener>();
@@ -157,6 +195,13 @@ export class JanggiEngine {
   private nnueLoaded = false;
   /** 신경망이 다 물릴 때까지. 실패해도 reject 하지 않는다(그래도 둘 수 있다). */
   private strongReady: Promise<void> = Promise.resolve();
+  /** 탐색을 끊으려고 엔진을 새로 띄웠는지. 그 탐색이 끝나는 자리에서 설정을 다시 건다. */
+  private restarted = false;
+  /**
+   * 단일 스레드 엔진인지. 격리가 안 되는 브라우저에서 이렇다(create 주석).
+   * Threads 설정과 상관없이 스레드 하나로 돈다. 복기 시간 어림이 이 값을 본다.
+   */
+  readonly singleThread: boolean;
   private options: EngineOptions = {
     threads: 1,
     hashMb: 128,
@@ -167,6 +212,7 @@ export class JanggiEngine {
 
   private constructor(raw: RawEngine) {
     this.raw = raw;
+    this.singleThread = raw.restart !== undefined;
     this.raw.addMessageListener((line) => {
       for (const fn of this.listeners) fn(line);
     });
@@ -176,31 +222,20 @@ export class JanggiEngine {
     onProgress: (p: LoadProgress) => void
   ): Promise<JanggiEngine> {
     /*
-     * 이 글은 **장기 두러 온 사람**이 읽는다(BootScreen 이 그대로 띄운다).
+     * 격리가 되면 스레드를 쓰는 엔진, 안 되면 단일 스레드 엔진을 띄운다.
      *
-     * 예전에는 "SharedArrayBuffer 를 쓸 수 없습니다 … npm run dev 또는 npm run preview" 였다.
-     * 쓰는 사람에게 npm 명령을 치라고 말한 셈이고, 실제로 이 화면을 본 사람은 까닭을 못
-     * 읽어 "광고차단앱 때문인가" 하고 디시에 물었다. 무엇이 막혔는지가 아니라 **무엇을
-     * 하면 되는지**를 적는다. 기술적인 사정은 BootScreen 의 진단 줄이 맡는다.
+     * 스레드를 쓰는 엔진은 SharedArrayBuffer 가 있어야 뜨고, 그것은 격리가 돼야 생긴다.
+     * 안드로이드 앱 안 브라우저(카카오톡, 네이버 앱 등)는 헤더를 줘도 격리가 안 된다. 예전에는
+     * 거기서 "다른 브라우저로 열기" 를 안내하고 멈췄고, 앱 안 브라우저 방문은 모두 실패했다.
+     *
+     * 단일 스레드 엔진은 같은 수를 두지만 폰의 4스레드보다 약 4배 느리다. 그래서 격리가
+     * 되는 브라우저에서는 쓰지 않는다. crossOriginIsolated 가 아예 없는 옛 사파리(15.2 미만)도
+     * 단일 스레드 쪽으로 간다.
      */
-    if (!crossOriginIsolated) {
-      throw new Error(
-        "카카오톡·디시 같은 앱 안에서 열면 이럴 수 있어요. 화면 구석의 메뉴에서 " +
-          "'다른 브라우저로 열기' 를 눌러 보세요."
-      );
-    }
-
-    await loadEngineScript();
-    const factory = window.Stockfish;
-    if (!factory) throw new Error("Stockfish 로더를 찾지 못했습니다.");
-
-    const wasmBinary = await fetchWithProgress(
-      ENGINE_BASE + "stockfish.wasm",
-      "엔진",
-      onProgress
-    );
-    onProgress({ stage: "엔진 초기화", loaded: 0, total: 0 });
-    const raw = await factory({ wasmBinary });
+    const raw =
+      globalThis.crossOriginIsolated === true
+        ? await loadThreaded(onProgress)
+        : await loadSingleThread(onProgress);
     const engine = new JanggiEngine(raw);
 
     await engine.handshake();
@@ -434,8 +469,27 @@ export class JanggiEngine {
   async stop(): Promise<void> {
     // 아직 시작하지 않고 큐에서 대기 중인 탐색도 무효로 만든다.
     this.searchGen += 1;
-    if (this.searching) this.send("stop");
+    if (this.searching) {
+      if (this.singleThread) this.interrupt();
+      else this.send("stop");
+    }
     await this.searchSettled;
+  }
+
+  /**
+   * 단일 스레드 엔진의 탐색을 끊는다. 엔진을 새로 띄우는 수밖에 없다(workerEngine.ts).
+   *
+   * stop 을 보내면 지금 탐색이 제 한도(노드 수, 시간)를 다 채운 뒤에야 닿는다. 높은 급수는
+   * 30초, 폰의 "정밀" 복기는 한 국면에 20초가 넘는다. 그동안 무르기·새 판이 멈춰 있게 된다.
+   *
+   * 새로 띄운 엔진은 bestmove 를 내지 않으므로, 기다리는 탐색(runSearch)에 대신 넣어 끝낸다.
+   * 설정은 그 탐색이 끝나는 자리에서 다시 건다. 큐 안이라 다음 작업보다 먼저 들어간다.
+   */
+  private interrupt() {
+    this.raw.restart?.();
+    this.searching = false;
+    this.restarted = true;
+    for (const fn of this.listeners) fn("bestmove (none)");
   }
 
   /**
@@ -514,6 +568,13 @@ export class JanggiEngine {
     this.searching = false;
     if (ticker) window.clearInterval(ticker);
     this.listeners.delete(listener);
+
+    if (this.restarted) {
+      // 새로 띄운 엔진은 아무것도 모른다. 신경망 파일은 workerEngine 이 다시 넣었다.
+      this.restarted = false;
+      await this.handshake();
+      await this.applyOptions();
+    }
 
     const best = out.find((l) => l.startsWith("bestmove"))?.split(" ")[1];
     snap.bestmove = best && best !== "(none)" ? best : null;

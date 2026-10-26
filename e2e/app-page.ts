@@ -4,10 +4,38 @@
 // 판(SVG)의 기물은 역할도 이름도 없어서 여기서 찾지 않는다 - 그것은 접근성 결함으로
 // 따로 적어 두었다. 그래서 수는 엔진이 두고, 사람은 한수쉼만 한다.
 
-import { expect, type Locator, type Page } from "@playwright/test";
+import { test as base, expect, type Locator, type Page } from "@playwright/test";
 
 /** 엔진이 수를 두거나 복기를 도는 동안 기다리는 시간 */
 export const ENGINE_WAIT = 60_000;
+
+export interface IsolationOption {
+  /**
+   * false 면 첫 문서 응답에서 COOP·COEP 헤더를 뺀다. 그러면 격리가 안 되고 SharedArrayBuffer 가
+   * 없다. 안드로이드 앱 안 브라우저가 이 상태다(헤더를 받아도 격리가 안 된다). 앱은 이때 단일
+   * 스레드 엔진을 Worker 에서 띄운다. 프로젝트마다 playwright.config.ts 에서 정한다.
+   */
+  isolated: boolean;
+}
+
+export const test = base.extend<IsolationOption>({
+  isolated: [true, { option: true }],
+  page: async ({ page, isolated }, use) => {
+    if (!isolated) {
+      await page.route(
+        (url) => url.pathname === "/",
+        async (route) => {
+          const response = await route.fetch();
+          const headers = { ...response.headers() };
+          delete headers["cross-origin-opener-policy"];
+          delete headers["cross-origin-embedder-policy"];
+          await route.fulfill({ response, headers });
+        }
+      );
+    }
+    await use(page);
+  },
+});
 
 export class AppPage {
   readonly errors: string[] = [];
@@ -57,6 +85,29 @@ export class AppPage {
    */
   async waitMyTurn() {
     await expect(this.pass, "엔진이 두고 내 차례가 된다").toBeEnabled({ timeout: ENGINE_WAIT });
+  }
+
+  /** 기권하고 결과 창에서 기보를 연다. */
+  async resignAndOpenRecord() {
+    await this.resign.click();
+    await expect(this.confirm).toBeVisible();
+    await this.confirm.getByRole("button", { name: "기권", exact: true }).click();
+    await expect(this.result).toBeVisible();
+    await this.result.getByRole("button", { name: "기보 보기" }).click();
+  }
+
+  /** 기보 탭의 복기 깊이 */
+  reviewDepth(name: "빠름" | "보통" | "정밀"): Locator {
+    return this.page.getByRole("button", { name, exact: true });
+  }
+  get startReview() {
+    return this.page.getByRole("button", { name: "복기 시작" });
+  }
+  get stopReview() {
+    return this.page.getByRole("button", { name: "중단" });
+  }
+  get reviewAgain() {
+    return this.page.getByRole("button", { name: "다시 복기" });
   }
 
   async noHorizontalScroll() {

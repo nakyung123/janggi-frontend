@@ -12,10 +12,14 @@
 // 반환형이 바뀐다(vite.config.ts 의 폴더주소 주석). Playwright 가 실행할 때 직접 읽는다.
 
 import { defineConfig, devices } from "@playwright/test";
+import type { IsolationOption } from "./e2e/app-page";
 
 const CI = !!process.env.CI;
 
-export default defineConfig({
+// 사용자의 68% 가 폰이고, 사용자 폰 폭이 320 이다.
+const phone320 = { ...devices["Desktop Chrome"], viewport: { width: 320, height: 720 }, hasTouch: true };
+
+export default defineConfig<IsolationOption>({
   testDir: "e2e",
   // 엔진이 수를 두고 복기를 도는 시간까지 넣는다.
   timeout: 120_000,
@@ -30,11 +34,9 @@ export default defineConfig({
     video: "retain-on-failure",
   },
   projects: [
-    {
-      // 사용자의 68% 가 폰이고, 사용자 폰 폭이 320 이다.
-      name: "폰 320",
-      use: { ...devices["Desktop Chrome"], viewport: { width: 320, height: 720 }, hasTouch: true },
-    },
+    { name: "폰 320", use: { ...phone320, isolated: true } },
+    // 안드로이드 앱 안 브라우저처럼 격리가 안 되는 조건. 단일 스레드 엔진이 뜬다(e2e/app-page.ts).
+    { name: "폰 320 · 격리 없음", use: { ...phone320, isolated: false } },
   ],
   webServer: {
     command: "npx vite build && npx vite preview --port 4173 --strictPort",
