@@ -12,7 +12,6 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { LOGIN_PATH } from "../../server/api";
 import { AppHeader } from "./AppHeader";
 
 afterEach(cleanup);
@@ -26,6 +25,7 @@ function 헤더(over: Partial<Parameters<typeof AppHeader>[0]> = {}) {
     onUpdates: vi.fn(),
     onNotice: vi.fn(),
     loggedIn: false as boolean | null,
+    loginPath: "/api/oauth2/authorization/google",
     busy: false,
     onSignOut: vi.fn(),
     ...over,
@@ -109,8 +109,8 @@ describe("☰ 메뉴", () => {
 
 describe("헤더 오른쪽 로그인 자리", () => {
   it("로그인하지 않았으면 구글 로그인으로 가는 링크", () => {
-    헤더({ loggedIn: false });
-    expect(screen.getByRole("link", { name: "로그인" }).getAttribute("href")).toBe(LOGIN_PATH);
+    const props = 헤더({ loggedIn: false });
+    expect(screen.getByRole("link", { name: "로그인" }).getAttribute("href")).toBe(props.loginPath);
     expect(screen.queryByRole("button", { name: "로그아웃" })).toBeNull();
   });
 

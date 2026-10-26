@@ -878,6 +878,7 @@ export default function App() {
         onUpdates={() => setUpdatesOpen(true)}
         onNotice={() => setNoticeOpen(true)}
         loggedIn={server.loggedIn}
+        loginPath={server.loginPath}
         busy={server.busy}
         onSignOut={server.signOut}
       />

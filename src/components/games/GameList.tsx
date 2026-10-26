@@ -15,7 +15,6 @@ import { parseFen } from "../../janggi/board";
 import { pageItems, resultTag, whenLabel } from "../../janggi/archive";
 import { SIDE_LABEL } from "../../janggi/pieces";
 import type { GameRow, ServerGames } from "../../hooks/useServerGames";
-import { LOGIN_PATH } from "../../server/api";
 import { MiniBoard } from "./MiniBoard";
 
 interface Props {
@@ -186,7 +185,7 @@ export function GameList(props: Props) {
             단추가 아니라 링크다. 구글 동의 화면을 사람이 봐야 하므로 쪽 전체가 옮겨갔다
             돌아온다 - fetch 로는 안 되는 일이다.
           */
-          <a className="games-signin" href={LOGIN_PATH}>
+          <a className="games-signin" href={server.loginPath}>
             구글로 로그인
           </a>
         )}

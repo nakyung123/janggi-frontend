@@ -13,6 +13,7 @@ import {
   fetchGame,
   fetchGames,
   fetchLoginState,
+  LOGIN_PATH,
   logout,
   uploadGame,
   withdraw as leave,
@@ -134,6 +135,8 @@ export function mergeRows(
 export interface ServerGames {
   /** 로그인되어 있나. 아직 물어보는 중이면 `null` 이다. */
   loggedIn: boolean | null;
+  /** 로그인하러 가는 주소. 화면은 이것을 링크로 건다(컴포넌트는 `server/` 를 모른다). */
+  loginPath: string;
   /** 이 판이 서버에도 있나. 표시를 붙일지 정할 때 쓴다. */
   onServer: (id: string) => boolean;
   /** 기기와 서버를 합친 목록. 화면이 그대로 그린다. */
@@ -333,5 +336,5 @@ export function useServerGames(games: ArchivedGame[]): ServerGames {
       .finally(() => setBusy(false));
   }, [setUploaded]);
 
-  return { loggedIn, onServer, rows, pull, busy, error, signOut, withdraw };
+  return { loggedIn, loginPath: LOGIN_PATH, onServer, rows, pull, busy, error, signOut, withdraw };
 }

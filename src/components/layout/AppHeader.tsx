@@ -20,7 +20,6 @@
 import { useRef, useState } from "react";
 import { Menu } from "lucide-react";
 
-import { LOGIN_PATH } from "../../server/api";
 import { MenuDrawer } from "./MenuDrawer";
 import { ModeTabs } from "./ModeTabs";
 import type { Mode } from "./ModeTabs";
@@ -38,6 +37,8 @@ interface Props {
   onNotice: () => void;
   /** 로그인 상태. null 은 아직 확인하는 중이다. */
   loggedIn: boolean | null;
+  /** 로그인하러 가는 주소. `useServerGames` 가 준다. */
+  loginPath: string;
   /** 서버와 주고받는 중이면 로그아웃을 잠근다(기보 탭의 로그아웃과 같다). */
   busy: boolean;
   onSignOut: () => void;
@@ -51,6 +52,7 @@ export function AppHeader({
   onUpdates,
   onNotice,
   loggedIn,
+  loginPath,
   busy,
   onSignOut,
 }: Props) {
@@ -96,7 +98,7 @@ export function AppHeader({
           탈퇴는 여기 두지 않는다. 되돌리기 어려워 보이는 일이라 기보 탭에서 한 번 더 묻는다.
         */}
         {loggedIn === false && (
-          <a className="top-login" href={LOGIN_PATH}>
+          <a className="top-login" href={loginPath}>
             로그인
           </a>
         )}

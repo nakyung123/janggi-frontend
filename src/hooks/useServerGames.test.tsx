@@ -128,6 +128,15 @@ describe("로그인한 뒤에 둔 판만 올린다", () => {
 
     await waitFor(() => expect(result.current.loggedIn).toBe(false));
   });
+
+  it("로그인하러 가는 주소를 화면에 넘긴다 - 컴포넌트는 server/ 를 모른다", async () => {
+    로그인확인.mockResolvedValue(false);
+
+    const { result } = renderHook(() => useServerGames([]));
+
+    await waitFor(() => expect(result.current.loggedIn).toBe(false));
+    expect(result.current.loginPath).toBe("/api/oauth2/authorization/google");
+  });
 });
 
 describe("복기를 돌리면 다시 올린다", () => {
