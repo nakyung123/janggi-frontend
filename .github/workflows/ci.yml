@@ -104,8 +104,12 @@ jobs:
       - name: 엔진 파일 준비
         run: node scripts/fetch-engine.mjs
 
+      # 브라우저만 받는다. --with-deps 를 붙이면 시스템 라이브러리를 apt 로 받는데, 그것이
+      # 때때로 초당 50KB 로 느려져 이 단계가 8분을 넘겼다(브라우저 본체는 7초). GitHub 의
+      # Ubuntu 실행 환경에는 구글 크롬이 깔려 있어 필요한 라이브러리가 이미 있다. 실행 환경이
+      # 바뀌어 모자라게 되면 E2E 가 없는 라이브러리 이름을 대며 바로 실패한다.
       - name: 브라우저 설치
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: E2E
         run: npx playwright test
@@ -183,8 +187,9 @@ jobs:
       - name: 엔진 파일 준비
         run: node scripts/fetch-engine.mjs
 
+      # --with-deps 를 붙이지 않는 까닭은 위 e2e 작업의 같은 단계에 적었다.
       - name: 브라우저 설치
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: 로그인·기보 E2E
         run: npx playwright test -c playwright.server.config.ts
