@@ -1,0 +1,60 @@
+# 바깥에서 보는 감시. 사이트·백엔드는 15분마다, DB 는 6시간마다 본다(scripts/watch.mjs 머리 주석).
+# 장애가 나면 "장애" 이슈를 열고, 회복하면 닫는다. 이슈를 열고 닫을 때 GitHub 가 메일을 보낸다.
+#
+# 알아 둘 것
+# - GitHub 는 예약 실행을 몇 분씩 늦게 돌린다. 장애를 알아채는 데 15~30분 걸릴 수 있다.
+# - 저장소에 60일 동안 활동이 없으면 GitHub 가 예약 실행을 멈춘다. 멈추면 Actions 화면에서 다시 켠다.
+# - 끄려면: gh workflow disable watch.yml
+name: watch
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+    # DB 를 보는 실행. 15분 실행과 겹치지 않게 7분에 둔다.
+    - cron: "7 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      db:
+        description: "DB 까지 본다"
+        type: boolean
+        default: false
+      fail:
+        description: "알림 시험: 이 대상을 일부러 실패시킨다"
+        type: choice
+        options: [none, site, backend, db]
+        default: none
+
+permissions:
+  contents: read
+  issues: write
+
+# 앞 실행이 30초씩 다시 해 보는 중에 다음 실행이 겹쳐 이슈를 두 번 열지 않게 한다.
+concurrency:
+  group: watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: 감시
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # 입력값은 명령 줄에 바로 넣지 않고 환경 변수로 받는다(셸 주입을 막는다).
+          SCHEDULE: ${{ github.event.schedule }}
+          INPUT_DB: ${{ inputs.db }}
+          INPUT_FAIL: ${{ inputs.fail }}
+        run: |
+          set -- --issues
+          if [ "$SCHEDULE" = "7 */6 * * *" ] || [ "$INPUT_DB" = "true" ]; then set -- "$@" --db; fi
+          case "$INPUT_FAIL" in
+            site|backend|db) set -- "$@" --fail "$INPUT_FAIL" ;;
+          esac
+          node scripts/watch.mjs "$@"
