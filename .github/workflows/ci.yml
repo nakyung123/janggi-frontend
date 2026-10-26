@@ -40,6 +40,11 @@ jobs:
       - name: 이벤트 이름이 서버 목록에 있는지
         run: node scripts/check-event-names.mjs
 
+      # 응답 헤더를 vercel.json(배포본)과 vite.config.ts(미리보기·개발 서버) 세 곳에 손으로
+      # 맞춰 둔다. 어긋나면 로컬에서 본 것이 배포본과 다르고, 격리 헤더가 빠지면 엔진이 안 뜬다.
+      - name: 헤더가 세 곳에서 같은지
+        run: node scripts/check-headers.mjs
+
       # `npm run build` 가 아니라 `vite build` 를 직접 부른다.
       #
       # `npm run build` 는 prebuild 로 scripts/fetch-engine.mjs 를 돌리는데, 그것이
