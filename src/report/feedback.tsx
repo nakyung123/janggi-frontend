@@ -98,6 +98,41 @@ export function inAppLabel(ua: string): string | null {
 }
 
 /**
+ * 안드로이드 앱 안 브라우저에서 같은 주소를 바깥 브라우저로 여는 링크. 아니면 null.
+ *
+ * **왜 두나** - 안드로이드 웹뷰는 COOP/COEP 를 보내도 교차 출처 격리가 되지 않는다
+ * (크로미움 버그 40914606). 그래서 엔진이 못 뜬다. 2026-10-20~26 에 네이버앱 4명,
+ * 카카오톡 1명이 들어와 전원 실패했다. 메뉴를 찾아 "다른 브라우저로 열기" 를 누르라는
+ * 글만으로는 대부분 그냥 나갔다.
+ *
+ * - 카카오톡은 `kakaotalk://web/openExternal` 로 바깥 브라우저를 연다. 공식 기능이
+ *   아니라 카카오톡이 바꾸면 안 될 수 있다.
+ * - 나머지는 안드로이드에 크롬으로 열라고 요청한다(`intent://`). 크롬이 없으면 아무 일도
+ *   없다. 대체 주소(browser_fallback_url)는 지금 그 앱 안에서 열려 같은 화면으로 돌아오므로
+ *   넣지 않았다. 화면의 안내 글이 남아 있어 그때는 그것을 따른다.
+ *
+ * 아이폰은 넣지 않았다. 실패한 기록이 없고, 앱 안에서 사파리를 여는 길도 다르다.
+ */
+export function outsideBrowserLink(
+  ua: string,
+  href: string
+): { href: string; label: string } | null {
+  if (!/Android/i.test(ua) || !inAppLabel(ua)) return null;
+  if (/KAKAOTALK/i.test(ua)) {
+    return {
+      href: "kakaotalk://web/openExternal?url=" + encodeURIComponent(href),
+      label: "다른 브라우저로 열기",
+    };
+  }
+  const url = new URL(href);
+  const scheme = url.protocol.replace(":", "");
+  return {
+    href: `intent://${url.host}${url.pathname}${url.search}#Intent;scheme=${scheme};package=com.android.chrome;end`,
+    label: "크롬으로 열기",
+  };
+}
+
+/**
  * 제보에 같이 붙일 것. 두 줄, 터진 적이 있으면 세 줄이다.
  *
  *   장기 AI v0.1.0 · 크롬 154 · 윈도우 · 창 1440×900

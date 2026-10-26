@@ -690,5 +690,20 @@
 .boot-actions {
   display: flex;
   justify-content: center;
+  gap: 8px;
   margin-top: 16px;
+}
+
+/* 링크지만 주 버튼(button.primary)과 같은 모양이다. 쪽이 바깥 브라우저로 넘어간다. */
+.boot-outside {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 20px;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: var(--ink);
+  color: var(--on-ink);
+  font-weight: 500;
+  text-decoration: none;
 }

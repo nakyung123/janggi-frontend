@@ -8,6 +8,7 @@ import {
   FeedbackButton,
   browserLabel,
   inAppLabel,
+  outsideBrowserLink,
   systemLabel,
 } from "../../report/feedback";
 
@@ -54,6 +55,7 @@ function diagnosis(): string {
 export function BootScreen({ failed, progress, error }: Props) {
   if (failed) {
     const diag = diagnosis();
+    const outside = outsideBrowserLink(navigator.userAgent, window.location.href);
     return (
       <div className="boot">
         <h1>장기 AI</h1>
@@ -80,6 +82,15 @@ export function BootScreen({ failed, progress, error }: Props) {
             그래도 안 되면 아래로 알려 주세요 - 위 한 줄이 이미 적혀 있습니다.
           </p>
           <div className="boot-actions">
+            {/*
+              안드로이드 앱 안 브라우저에서만 선다. 거기서는 다시 시도해도 안 뜨므로 이것이
+              할 일이고, 그래서 채운 버튼이다. 쪽 전체가 다른 앱으로 넘어가므로 링크다.
+            */}
+            {outside && (
+              <a className="boot-outside" href={outside.href}>
+                {outside.label}
+              </a>
+            )}
             <button type="button" onClick={() => window.location.reload()}>
               다시 시도
             </button>
