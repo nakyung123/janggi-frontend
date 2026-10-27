@@ -1,9 +1,10 @@
 // E2E 설정. 배포용으로 빌드한 앱을 미리보기 서버로 띄우고 진짜 엔진으로 돌린다.
 //
 //   npx playwright test        빌드 → 미리보기(4173) → 테스트
+//   E2E_SLOT=1 npx playwright test   다른 포트 묶음(4174)으로. 작업 폴더 여럿이 동시에 돌릴 때(e2e/ports.ts)
 //
 // 미리보기는 vite.config.ts 의 preview 헤더(COOP·COEP·CSP)를 그대로 건다. 그래서 엔진이
-// 배포본과 같은 조건에서 뜬다. /api 는 localhost:8080 으로 넘어가는데 E2E 에서는 띄우지
+// 배포본과 같은 조건에서 뜬다. /api 는 백엔드(8080)로 넘어가는데 E2E 에서는 띄우지
 // 않는다. 로그인·기보 올리기는 이 E2E 의 범위가 아니다(운영 DB 에 쓰기 때문).
 //
 // 엔진 신경망(public/engine)이 있어야 한다. 없으면 npm run fetch-engine 으로 받는다.
@@ -13,6 +14,7 @@
 
 import { defineConfig, devices } from "@playwright/test";
 import type { IsolationOption } from "./e2e/app-page";
+import { previewServer, previewURL } from "./e2e/ports";
 
 const CI = !!process.env.CI;
 
@@ -30,7 +32,7 @@ export default defineConfig<IsolationOption>({
   workers: 1,
   reporter: CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
-    baseURL: "http://localhost:4173",
+    baseURL: previewURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
@@ -41,8 +43,7 @@ export default defineConfig<IsolationOption>({
     { name: "폰 320 · 격리 없음", use: { ...phone320, isolated: false } },
   ],
   webServer: {
-    command: "npx vite build && npx vite preview --port 4173 --strictPort",
-    url: "http://localhost:4173",
+    ...previewServer,
     // 이미 떠 있는 서버를 쓰지 않는다. 쓰게 두었더니 윈도우에서 꺼지지 않고 남은 옛
     // 미리보기 서버를 몰래 써서, 헤더를 바꿔도 반영되지 않은 채 통과했다. 남은 서버가
     // 있으면 --strictPort 때문에 "포트 사용 중" 으로 멈춘다.

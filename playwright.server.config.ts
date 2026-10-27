@@ -1,12 +1,15 @@
 // 로그인·기보 올리기 E2E 설정. 운영에 닿지 않게 전부 이 컴퓨터(또는 CI)에서 띄웠다가 끈다.
 //
 //   npx playwright test -c playwright.server.config.ts
+//   E2E_SLOT=1 npx playwright test -c playwright.server.config.ts   다른 포트 묶음으로(e2e/ports.ts)
 //
+//   포트는 묶음 0 의 값이다. 묶음 번호만큼 모두 더한다.
 //   브라우저 → 프론트 미리보기(4173) → /api → 백엔드 jar(8080) → Postgres(Docker, 55432)
 //                   └──── 가짜 구글(9400) ←───────┘
 //
 // 필요한 것: Docker, Java 21, 빌드한 백엔드 jar(janggi-events 에서 ./gradlew bootJar).
-// jar 는 옆 폴더(../janggi-events/build/libs)에서 찾는다. 다른 곳이면 BACKEND_JAR 로 준다.
+// jar 는 옆 폴더(../janggi-events/build/libs)에서 찾는다. 작업 폴더(janggi-wt/<이름>)에서 돌리면
+// 한 칸 더 위(../../janggi-events)에 있다. 다른 곳이면 BACKEND_JAR 로 준다.
 // CI 는 Postgres 를 서비스로 띄우므로 E2E_DB_READY=1 을 주면 Docker 로 띄우지 않는다.
 //
 // 진짜 구글은 자동으로 움직이는 브라우저의 로그인을 막는다. 그래서 구글만 가짜(e2e/fake-google.mjs)다.
@@ -18,17 +21,20 @@
 import { defineConfig, devices } from "@playwright/test";
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+
+import { dbContainer, fakeGoogleURL, ports, previewServer, previewURL } from "./e2e/ports";
 
 const CI = !!process.env.CI;
 
-const FAKE_GOOGLE = "http://localhost:9400";
-const DB_PORT = 55432;
+const DB_PORT = ports.db;
 
 function backendJar(): string {
   if (process.env.BACKEND_JAR) return process.env.BACKEND_JAR;
-  const dir = join("..", "janggi-events", "build", "libs");
+  const dirs = [join("..", "janggi-events", "build", "libs"), join("..", "..", "janggi-events", "build", "libs")];
+  const dir = dirs.find((d) => existsSync(d));
+  if (!dir) throw new Error(`백엔드 jar 폴더가 없습니다: ${dirs.join(", ")}. janggi-events 에서 ./gradlew bootJar 를 돌리세요.`);
   const jar = readdirSync(dir).find((f) => /^janggi-backend-.*\.jar$/.test(f) && !f.includes("plain"));
   if (!jar) throw new Error(`백엔드 jar 가 없습니다: ${dir}. janggi-events 에서 ./gradlew bootJar 를 돌리세요.`);
   return join(dir, jar);
@@ -36,19 +42,19 @@ function backendJar(): string {
 
 /** 백엔드가 받는 설정. 값은 이 실행에서만 쓰는 시험용이다. 운영 값이 아니다. */
 const backendEnv = {
-  PORT: "8080",
+  PORT: String(ports.backend),
   SPRING_DATASOURCE_URL: `jdbc:postgresql://localhost:${DB_PORT}/e2e`,
   SPRING_DATASOURCE_USERNAME: "postgres",
   SPRING_DATASOURCE_PASSWORD: "e2e",
   GOOGLE_CLIENT_ID: "e2e-client",
   GOOGLE_CLIENT_SECRET: "e2e-secret",
   JANGGI_TOKEN_SECRET: randomBytes(32).toString("hex"),
-  SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_GOOGLE_ISSUER_URI: FAKE_GOOGLE,
+  SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_GOOGLE_ISSUER_URI: fakeGoogleURL,
   SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_REDIRECT_URI:
-    "http://localhost:4173/api/login/oauth2/code/google",
+    `${previewURL}/api/login/oauth2/code/google`,
 };
 
-const DB_CONTAINER = "janggi-e2e-db";
+const DB_CONTAINER = dbContainer;
 const useDockerDb = !process.env.E2E_DB_READY;
 
 /*
@@ -92,7 +98,7 @@ export default defineConfig({
   workers: 1,
   reporter: CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
-    baseURL: "http://localhost:4173",
+    baseURL: previewURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
@@ -106,22 +112,21 @@ export default defineConfig({
   webServer: [
     ...(useDockerDb ? [db] : []),
     {
-      command: "node e2e/fake-google.mjs 9400",
-      url: `${FAKE_GOOGLE}/.well-known/openid-configuration`,
+      command: `node e2e/fake-google.mjs ${ports.fakeGoogle}`,
+      url: `${fakeGoogleURL}/.well-known/openid-configuration`,
       reuseExistingServer: false,
       timeout: 30_000,
     },
     {
       // 백엔드는 처음 연결할 때 Flyway 로 표를 만든다. DB 가 뜰 때까지 연결을 기다린다(Hikari 30초).
       command: `java -jar "${backendJar()}"`,
-      url: "http://localhost:8080/actuator/health",
+      url: `http://localhost:${ports.backend}/actuator/health`,
       env: backendEnv,
       reuseExistingServer: false,
       timeout: 180_000,
     },
     {
-      command: "npx vite build && npx vite preview --port 4173 --strictPort",
-      url: "http://localhost:4173",
+      ...previewServer,
       reuseExistingServer: false,
       timeout: 120_000,
     },

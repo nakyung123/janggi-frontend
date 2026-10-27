@@ -1,6 +1,6 @@
 /// <reference types="vitest/config" />
 import type { Plugin } from "vite";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 
 /*
@@ -138,22 +138,31 @@ function 폴더주소플러그인(): Plugin {
   };
 }
 
-const API_PROXY = {
-  "/api": {
-    target: "http://localhost:8080",
-    changeOrigin: true,
-    rewrite: (p: string) => p.replace(/^\/api/, ""),
-  },
-};
+/*
+ * 되돌릴 백엔드 포트. 기본 8080. E2E 를 여러 작업 폴더에서 동시에 돌릴 때 묶음마다 다른
+ * 백엔드를 띄우므로 BACKEND_PORT 로 바꾼다(e2e/ports.ts 가 미리보기를 띄우며 넘긴다).
+ * process.env 를 직접 읽지 않고 loadEnv 를 쓰는 까닭 - 이 파일은 tsc -b 에 들어가는데 Node
+ * 타입을 넣지 않았다(위 폴더주소 주석).
+ */
+function apiProxy(mode: string) {
+  const port = loadEnv(mode, ".", "BACKEND_PORT").BACKEND_PORT || "8080";
+  return {
+    "/api": {
+      target: `http://localhost:${port}`,
+      changeOrigin: true,
+      rewrite: (p: string) => p.replace(/^\/api/, ""),
+    },
+  };
+}
 
-export default defineConfig(({ command, isPreview }) => ({
+export default defineConfig(({ command, mode, isPreview }) => ({
   plugins: [react(), 폴더주소플러그인()],
   // 빌드한 index.html 에는 표식을 남기지 않는다. 개발 서버일 때만 붙인다.
   html: command === "serve" && !isPreview ? { cspNonce: DEV_NONCE } : undefined,
-  server: { headers: devHeaders, proxy: API_PROXY },
+  server: { headers: devHeaders, proxy: apiProxy(mode) },
   // 미리보기에도 같이 건다. 배포본과 같은 번들로 확인하는 자리라, 여기에만 길이
   // 없으면 "개발에서는 되는데 미리보기에서는 안 되는" 상태가 된다.
-  preview: { headers, proxy: API_PROXY },
+  preview: { headers, proxy: apiProxy(mode) },
   // 11MB 신경망과 1.6MB wasm 은 public/ 에 그대로 두고 fetch 로 읽는다.
   // 번들러가 건드리지 않도록 assetsInlineLimit 는 기본값을 유지한다.
 

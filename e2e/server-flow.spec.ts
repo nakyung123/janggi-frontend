@@ -19,12 +19,11 @@
 
 import { expect, type APIRequestContext, type Browser } from "@playwright/test";
 import { AppPage, ENGINE_WAIT, test } from "./app-page";
-
-const FAKE_GOOGLE = "http://localhost:9400";
+import { fakeGoogleURL, previewURL } from "./ports";
 
 /** 가짜 구글이 다음 로그인을 이 사람으로 하게 하고, 로그인을 누른다. */
 async function signIn(request: APIRequestContext, app: AppPage, sub: string) {
-  const res = await request.post(`${FAKE_GOOGLE}/e2e/next-user?sub=${encodeURIComponent(sub)}`);
+  const res = await request.post(`${fakeGoogleURL}/e2e/next-user?sub=${encodeURIComponent(sub)}`);
   expect(res.ok(), "가짜 구글에 다음 사람을 알렸다").toBe(true);
   await app.login.click();
   // 쪽이 구글을 거쳐 돌아오면 엔진을 다시 띄운다. 헤더는 엔진이 뜬 뒤에 선다.
@@ -34,7 +33,7 @@ async function signIn(request: APIRequestContext, app: AppPage, sub: string) {
 /** 새 기기. 저장소와 쿠키가 빈 브라우저 문맥에 같은 폭으로 연다. */
 async function newDevice(browser: Browser): Promise<AppPage> {
   const context = await browser.newContext({
-    baseURL: "http://localhost:4173",
+    baseURL: previewURL,
     viewport: { width: 320, height: 720 },
     hasTouch: true,
   });
