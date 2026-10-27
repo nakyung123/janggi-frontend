@@ -146,9 +146,18 @@
   display: none;
 }
 
+/*
+ * 숨기되 쪽 제목(h1)으로는 남긴다(base.css 의 .sr-only 와 같은 속성). display: none 이면
+ * 화면 읽기 프로그램과 검색에서도 빠져, 넓은 화면에 쪽 제목이 하나도 없게 된다.
+ */
 @media (min-width: 901px) {
   .top h1 {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 }
 
