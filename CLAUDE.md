@@ -35,6 +35,7 @@ PAT=$(printf '\xef\xbf\xbd'); git grep -nF "$PAT" -- . && echo "깨진 글자 �
 
 - 위의 넷(타입·테스트·빌드·E2E)은 올리기 전에 돌린다. CI(`.github/workflows/ci.yml`)도 같은 넷을 본다. Vercel 은 테스트를 돌리지 않는다.
 - 로그인·기보 E2E 는 로그인·기보·`server/` 를 바꿀 때 돌린다. CI 는 늘 돌린다(백엔드 main 을 받아서).
+- 작업 폴더 여럿에서 E2E 를 동시에 돌릴 때는 `E2E_SLOT=1 npx playwright test` 처럼 묶음 번호(0~9)를 준다. 모든 포트에 그 수를 더한다(기본 0 은 4173·9400·8080·55432, `e2e/ports.ts`).
 - 깨진 글자 검사를 `$'\ufffd'` 로 쓰면 이 셸에서 아무것도 찾지 못하고 "깨끗" 이라고 한다.
 
 ## 지원 브라우저
