@@ -57,6 +57,19 @@ jobs:
       - name: 빌드
         run: npx vite build
 
+      # vercel.json 이 /assets/ 를 1년 동안 묻지 않고 쓰게 한다(immutable). 이름에 내용 해시가
+      # 있어서 내용이 바뀌면 이름도 바뀌므로 안전하다. 이름이 고정된 파일(public/assets/ 에 넣은
+      # 것 등)이 섞이면 고쳐도 사용자 브라우저가 1년 동안 옛것을 쓴다. 그것을 여기서 막는다.
+      - name: 1년 캐시하는 자산은 이름에 해시가 있는지
+        run: |
+          BAD=$(ls dist/assets | grep -vE -- '-[A-Za-z0-9_-]{8}\.[a-z0-9]+$' || true)
+          if [ -n "$BAD" ]; then
+            echo "$BAD"
+            echo "::error::위 파일은 이름에 해시가 없는데 /assets/ 에 있어 1년 캐시된다."
+            exit 1
+          fi
+          echo "모두 해시 이름 ($(ls dist/assets | wc -l)개)"
+
       # 한글이 깨져 들어간 적이 있다. 2026-10-08 에 자동 PR 이 src/App.tsx 의 한글 세
       # 글자를 날렸다. 영어만 있는 파일에서는 절대 안 생겨서 도구들이 못 보고 지나간다.
       #
