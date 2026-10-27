@@ -157,6 +157,20 @@ export default defineConfig(({ command, isPreview }) => ({
   // 11MB 신경망과 1.6MB wasm 은 public/ 에 그대로 두고 fetch 로 읽는다.
   // 번들러가 건드리지 않도록 assetsInlineLimit 는 기본값을 유지한다.
 
+  // React 를 따로 묶는다. 한 파일이면 앱 코드 한 줄만 바뀌어도 이름이 바뀌어, 다시 오는
+  // 사람이 React(gzip 60KB)까지 새로 받는다. 따로 두면 React 판이 그대로인 배포에서는 그
+  // 파일 이름이 같아 1년 캐시(vercel.json /assets/)에서 꺼내 쓴다. 아이콘·Vercel 측정은
+  // Dependabot 이 자주 올려서 같이 묶지 않는다 - 섞으면 React 파일 이름도 자주 바뀐다.
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [{ name: "react", test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ }],
+        },
+      },
+    },
+  },
+
   /*
    * 쪽은 하나다(index.html). 한동안 업데이트 내역을 /updates/ 로 따로 세워
    * 진입점이 둘이었는데, 그 글을 앱 안의 창으로 옮기면서 하나로 돌아왔다.
