@@ -6,7 +6,9 @@
 // 깨지면(어느 한 메뉴가 목록 대신 제 목록을 들면) 한쪽에만 화면이 뜬다. 넓은 화면에서
 // 보면 멀쩡하고 폰에서만 갈 길이 없어지는 식이라, 눈으로는 놓치기 쉽다.
 //
-// 여기서는 진짜 목록 뒤에 임시 화면 둘(같은 묶음)을 붙여 App 을 띄운다. 어느 폭에서 어느
+// 여기서는 진짜 목록 뒤에 임시 화면 둘(같은 묶음)을 붙여 App 을 띄운다. 기대하는 메뉴는
+// 목록에서 만든다(menuOf) - 다른 세션이 목록에 화면을 더해도 이 시험은 고치지 않는다.
+// 어느 폭에서 어느
 // 메뉴가 보이는지는 CSS 가 정하고 jsdom 은 CSS 를 읽지 않는다 - 그래서 두 메뉴가 다 붙어
 // 있고, 각각 안에서 찾는다.
 
@@ -56,18 +58,21 @@ const 항목들 = (box: HTMLElement) =>
 describe("메뉴 목록에 한 줄", () => {
   it("목록의 화면이 폰 메뉴와 왼쪽 메뉴에 같은 순서로 다 뜬다", async () => {
     await start();
-    const 기대 = ["대국", "임시 하나", "임시 둘", "기보"];
-    expect(SCREENS).toHaveLength(4);
+    const 기대 = menuOf(SCREENS).flatMap((g) => g.items.map((i) => i.label));
+    expect(기대).toEqual(expect.arrayContaining(["대국", "기보", "임시 하나", "임시 둘"]));
     expect(항목들(왼쪽메뉴())).toEqual(기대);
     expect(항목들(폰메뉴())).toEqual(기대);
   });
 
-  it("항목이 둘 이상인 묶음만 묶음 이름이 선다", async () => {
+  it("묶음 이름은 menuOf 가 정한 것만 두 메뉴에 선다", async () => {
     await start();
-    expect(within(왼쪽메뉴()).getByText("배우기")).toBeTruthy();
-    expect(within(폰메뉴()).getByText("배우기")).toBeTruthy();
-    // 대국 · 기록 묶음은 항목이 하나라 이름 없이 항목만 선다.
-    expect(within(왼쪽메뉴()).queryByText("기록")).toBeNull();
+    const 묶음이름 = (box: HTMLElement) =>
+      Array.from(box.querySelectorAll(".menu-heading")).map((e) => e.textContent);
+    const 기대 = menuOf(SCREENS).flatMap((g) => (g.heading ? [g.heading] : []));
+    // 임시 화면 둘이 같은 묶음이라 적어도 그 이름은 선다.
+    expect(기대).toContain("배우기");
+    expect(묶음이름(왼쪽메뉴())).toEqual(기대);
+    expect(묶음이름(폰메뉴())).toEqual(기대);
   });
 
   it("왼쪽 메뉴에서 누르면 그 화면이 서고 판은 내려가며, 대국을 누르면 판이 돌아온다", async () => {
@@ -111,5 +116,10 @@ describe("menuOf", () => {
       },
       { heading: null, items: [{ id: "기보", label: "기보" }] },
     ]);
+  });
+
+  it("항목이 하나뿐인 묶음은 이름 없이, 둘 이상이면 이름과 함께 선다", () => {
+    const menu = menuOf([화면("대국", "play"), 화면("기물", "learn"), 화면("규칙", "learn")]);
+    expect(menu.map((g) => g.heading)).toEqual([null, "배우기"]);
   });
 });
