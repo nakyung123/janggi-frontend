@@ -276,6 +276,20 @@ describe("정확도와 실수 횟수", () => {
     }]);
   });
 
+  it("복기한 판이 30판이면 다 주고, 31판이면 가장 오래된 한 판을 뺀다 - 정확도와 실수 횟수 둘 다", () => {
+    // 끝난 때 1~31. 거꾸로 넣어도 끝난 때로 고른다. 복기 안 한 더 늦은 판은 30판에 안 든다.
+    const 복기한판 = Array.from({ length: 31 }, (_, i) => 기기({ endedAt: i + 1, reviewed: 복기 }));
+    const 복기안한늦은판 = 기기({ endedAt: 1_000 });
+    const 서른 = 셈({ server: [], local: 복기한판.slice(1), uploaded: 다올림 });
+    expect(서른.accuracy.map((a) => a.endedAt)).toEqual(Array.from({ length: 30 }, (_, i) => i + 2));
+    const 서른하나 = 셈({ server: [], local: [복기안한늦은판, ...[...복기한판].reverse()], uploaded: 다올림 });
+    expect(서른하나.counted).toBe(32);
+    expect(서른하나.accuracy).toHaveLength(30);
+    expect(서른하나.accuracy[0].endedAt).toBe(2);
+    expect(서른하나.accuracy[29].endedAt).toBe(31);
+    expect(서른하나.mistakes.map((m) => m.clientId)).toEqual(서른하나.accuracy.map((a) => a.clientId));
+  });
+
   it("구간 끝의 수는 그 구간에 든다 - 20수째는 앞, 21수째는 가운데, 60수째는 가운데, 61수째는 뒤", () => {
     const 판 = 기기({
       reviewed: [

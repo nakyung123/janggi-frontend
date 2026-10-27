@@ -44,13 +44,27 @@ export const K_LATER = 20;
 export const EARLY_GAMES = 10;
 
 /**
+ * 정확도·실수 횟수에 쓰는 판 수. 복기한 판 중 가장 최근 것부터 이만큼.
+ *
+ * "정확도 변화" 는 요즘 어떻게 두는지를 보이는 것이라, 오래전 판까지 늘어놓지 않는다. 서버가
+ * 계산하는 길을 설계할 때 정한 수(최근 복기한 30판)와 같게 둔다.
+ */
+export const RECENT_REVIEWED = 30;
+
+/**
  * 점수에 세는 결과. 표로 두어 결과 종류가 늘면 타입 검사가 여기를 가리킨다.
  *
- * - 끝나는 일곱 가지는 센다. 기권도 진 판이다 - 대국 중 '새 대국' 을 누르면 판이 남지
- *   않으므로 기권은 일부러 한 것이다.
+ * - 끝나는 일곱 가지는 센다. 기권도 진 판이다.
  * - 불러온 기보(record)는 뺀다. 상대 급수가 파일에 적힌 값이라 믿을 수 없고, 끝난 때가
  *   불러온 시각이다.
  * - 안 끝난 판(abandoned)은 뺀다.
+ *
+ * 지금 남는 한계 둘은 전적 화면을 만들 때 대국 화면 쪽에서 막을 예정이다(2026-10-27 사용자
+ * 결정). 그 전까지는 판에 적힌 그대로 센다.
+ * - 두는 중에 상대 급수나 내 진영을 바꾸면, 판이 끝난 순간의 급수·진영으로 세어진다.
+ *   → 첫 수 뒤에는 급수·진영을 잠근다.
+ * - 두던 판을 '새 대국' 으로 버리면 판이 남지 않아, 지는 판을 버린 만큼 점수가 높게 나온다.
+ *   → 확인을 받은 뒤 기권패로 남긴다.
  */
 const COUNTED: Record<ArchivedKind, boolean> = {
   checkmate: true,
@@ -147,9 +161,9 @@ export interface PlayerStats {
   rating: Rating | null;
   /** 사다리 순서(약한 급수부터). 둔 급수만. */
   byLevel: LevelRecord[];
-  /** 복기한 판만. 오래된 판부터. */
+  /** 복기한 판 중 최근 RECENT_REVIEWED(30)판. 오래된 판부터. */
   accuracy: AccuracyPoint[];
-  /** 복기한 판 중 내가 둔 수가 있는 판만(정확도와 같은 판). 오래된 판부터. */
+  /** 정확도와 같은 판(복기한 판 중 최근 30판, 내가 둔 수가 있는 판). 오래된 판부터. */
   mistakes: MistakeCount[];
 }
 
@@ -172,8 +186,12 @@ export interface StatsInput {
   /** 이 기기의 기보. 복기 내용은 여기에만 있다. */
   local: readonly ArchivedGame[];
   /**
-   * 이 기기의 판이 서버에 올라갔나(useServerGames 의 `onServer`). 방금 올린 판은 서버
-   * 목록을 다시 받기 전까지 거기 없어서 이것으로 센다.
+   * 이 기기의 판 중 **이 서버 목록을 받은 뒤에, 이 기기에서, 지금 계정으로 올린 판**만 참.
+   * 방금 올린 판은 서버 목록을 다시 받기 전까지 거기 없어서 이것으로 센다.
+   *
+   * useServerGames 의 `onServer` 를 넘기지 않는다. 그것은 올린 기록(`janggi:uploaded`)에
+   * 번호가 있는지만 보는데, 그 기록은 계정을 가리지 않는다. 한 브라우저에서 계정이 바뀌면
+   * 앞 계정이 올린 판이 뒤 계정 점수에 들어간다.
    */
   uploaded: (clientId: string) => boolean;
 }
@@ -279,17 +297,20 @@ function mistakesOf(game: CountedGame, local: ArchivedGame): MistakeCount {
  * 기기에서만 복기한 판은 빠진다(사용자가 받아들인 것). 점수에 안 세는 판(불러온 기보 등)은
  * 복기가 있어도 넣지 않는다 - 한 화면의 숫자가 모두 같은 판 묶음에서 나와야 서로 견줄 수
  * 있다. 내가 둔 수가 없는 판은 둘 다에서 뺀다 - "큰 실수 0회" 로 넣으면 표본 0 이 0 으로 보인다.
+ * 그렇게 고른 판 중 최근 RECENT_REVIEWED 판만 준다. 둘이 늘 같은 판을 가리키게 같이 자른다.
  */
 export function computeStats(input: StatsInput): StatsResult {
   if (input.server === null) return { status: "no-server-list" };
   const games = collect(input.server, input);
   const localById = new Map(input.local.map((g) => [g.id, g]));
-  const reviewed = games.flatMap((g) => {
-    const local = localById.get(g.clientId);
-    if (!local?.reviewed) return [];
-    const value = accuracyOf(local.reviewed, g.mySide);
-    return value === null ? [] : [{ game: g, local, value }];
-  });
+  const reviewed = games
+    .flatMap((g) => {
+      const local = localById.get(g.clientId);
+      if (!local?.reviewed) return [];
+      const value = accuracyOf(local.reviewed, g.mySide);
+      return value === null ? [] : [{ game: g, local, value }];
+    })
+    .slice(-RECENT_REVIEWED);
 
   return {
     status: "ok",
