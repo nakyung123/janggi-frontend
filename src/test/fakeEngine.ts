@@ -55,6 +55,8 @@ export class FakeEngine {
    * 내놓는 수까지 맞춰야 해서 판정과 상관없는 것을 더 많이 꾸미게 된다.
    */
   probeAnswer: ((ref: PositionRef) => Partial<PositionProbe> | null) | null = null;
+  /** true 면 한 국면 탐색(analyzeOnce, 복기가 쓴다)의 답을 releaseOnce() 까지 붙잡는다. 복기가 도는 채로 둘 때. */
+  holdOnce = false;
 
   // --- 기록 ------------------------------------------------------------------
 
@@ -66,6 +68,7 @@ export class FakeEngine {
   private options: EngineOptions = { threads: 1, hashMb: 16, multiPV: 1, skill: 20, variant: "janggi" };
   private gen = 0;
   private held: (() => void)[] = [];
+  private heldOnce: (() => void)[] = [];
 
   /** 테스트를 시작할 때마다 손잡이와 기록을 처음으로 돌린다. */
   reset() {
@@ -73,6 +76,8 @@ export class FakeEngine {
     this.holdProbe = null;
     this.illegalAt = null;
     this.probeAnswer = null;
+    this.holdOnce = false;
+    this.heldOnce = [];
     this.searches = [];
     this.answers = [];
     this.held = [];
@@ -88,6 +93,14 @@ export class FakeEngine {
   releaseProbes() {
     const held = this.held;
     this.held = [];
+    for (const send of held) send();
+  }
+
+  /** 붙잡아 둔 한 국면 탐색의 답을 모두 보내고, 그 뒤로는 붙잡지 않는다. */
+  releaseOnce() {
+    this.holdOnce = false;
+    const held = this.heldOnce;
+    this.heldOnce = [];
     for (const send of held) send();
   }
 
@@ -138,7 +151,9 @@ export class FakeEngine {
   }
 
   async analyzeOnce(ref: PositionRef, _limits: SearchLimits): Promise<AnalysisSnapshot> {
-    return snapshotOf(bestMove(positionOf(ref)));
+    const answer = snapshotOf(bestMove(positionOf(ref)));
+    if (!this.holdOnce) return answer;
+    return new Promise((resolve) => this.heldOnce.push(() => resolve(answer)));
   }
 
   async stop(): Promise<void> {

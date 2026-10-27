@@ -13,11 +13,16 @@
 // 있고, 각각 안에서 찾는다.
 
 import "./test/browser";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { writeStored } from "./hooks/usePersisted";
+import type { ArchivedGame } from "./janggi/archive";
+import { START_FEN } from "./janggi/board";
+import { nextEntry, startHistory } from "./janggi/history";
 import { GROUPS, SCREENS, menuOf } from "./screens";
 import type { Screen } from "./screens";
+import { FakeEngine } from "./test/fakeEngine";
 
 vi.mock("./engine/engine", async () => ({
   JanggiEngine: (await import("./test/fakeEngine")).FakeEngine,
@@ -37,6 +42,10 @@ vi.mock("./screens", async (importOriginal) => {
   };
 });
 
+beforeEach(() => {
+  localStorage.clear();
+  FakeEngine.current.reset();
+});
 afterEach(cleanup);
 
 async function start() {
@@ -92,6 +101,48 @@ describe("메뉴 목록에 한 줄", () => {
     fireEvent.click(within(폰메뉴()).getByRole("button", { name: "임시 둘" }));
     expect(screen.getByText("임시 둘 화면")).toBeTruthy();
     expect(screen.queryByRole("dialog", { name: "메뉴" })).toBeNull();
+  });
+});
+
+describe("복기가 도는 동안", () => {
+  /** 기보 목록에 끝난 판 하나(초가 한 수 두고 기권). 엔진이 하나라 복기가 도는 동안은 다른 화면이 쓸 수 없다. */
+  function 끝난판(): ArchivedGame {
+    const history = startHistory(START_FEN);
+    history.push(nextEntry(START_FEN, "a4", "a5"));
+    return {
+      id: "g1",
+      endedAt: Date.now(),
+      mySide: "cho",
+      levelId: "k12",
+      levelName: "12급",
+      variant: "janggi",
+      result: { kind: "resign", winner: "han" },
+      history,
+      reviewed: null,
+    };
+  }
+
+  it("두 메뉴 어디서 눌러도 화면을 옮기지 않고, 복기가 끝나면 옮긴다", async () => {
+    writeStored("games", [끝난판()]);
+    await start();
+    fireEvent.click(within(왼쪽메뉴()).getByRole("button", { name: "기보" }));
+    const 판카드 = within(screen.getByRole("region", { name: "지난 판" })).getAllByRole("listitem")[0];
+    fireEvent.click(within(판카드).getByRole("button"));
+    FakeEngine.current.holdOnce = true;
+    fireEvent.click(await screen.findByRole("button", { name: "복기 시작" }));
+    const 중단 = await screen.findByRole("button", { name: /중단/ });
+
+    fireEvent.click(within(왼쪽메뉴()).getByRole("button", { name: "대국" }));
+    fireEvent.click(within(폰메뉴()).getByRole("button", { name: "임시 하나" }));
+    expect(screen.queryByText("임시 하나 화면")).toBeNull();
+    expect(screen.queryByRole("button", { name: "새 대국" })).toBeNull();
+    expect(중단.isConnected).toBe(true);
+    expect(within(왼쪽메뉴()).getByRole("button", { name: "기보" }).getAttribute("aria-current")).toBe("page");
+
+    await act(async () => FakeEngine.current.releaseOnce());
+    await waitFor(() => expect(screen.queryByRole("button", { name: /중단/ })).toBeNull());
+    fireEvent.click(within(왼쪽메뉴()).getByRole("button", { name: "임시 하나" }));
+    expect(screen.getByText("임시 하나 화면")).toBeTruthy();
   });
 });
 
