@@ -126,8 +126,6 @@ jobs:
   # 백엔드는 main 의 최신 코드를 쓴다 - 둘이 지금 맞물리는지를 보는 자리다.
   e2e-server:
     runs-on: ubuntu-latest
-    # 새로 만든 E2E 라 간헐 실패가 줄 때까지 CI 전체를 막지 않는다. 연속 10번 통과하면 이 줄을 지운다.
-    continue-on-error: true
     services:
       postgres:
         image: postgres:18-alpine
