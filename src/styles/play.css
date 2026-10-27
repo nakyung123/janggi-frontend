@@ -46,8 +46,11 @@
  * 네 칸이 한 줄에 서려면 화면 폭이 371 은 돼야 한다(잰 값). 그보다 좁으면 마지막 칸이
  * 홈 밖으로 나가고, 320 에서는 쪽 전체가 옆으로 18 넘쳤다. 둘씩 두 줄로 놓는다 -
  * 3+1 로 접히지 않고 칸 줄이 맞는다.
+ *
+ * 폭이 좁은 PC 창(901~1180)도 같다. 오른쪽 칸이 320 이라 안쪽이 280~288 이고, 폰 371 의
+ * 안쪽(371 - 여백 12×2 - 패널 안쪽 16×2 = 315)보다 좁다(base.css 의 --panel-w).
  */
-@media (max-width: 374px) {
+@media (max-width: 374px), (min-width: 901px) and (max-width: 1180px) {
   .setup-row .seg {
     display: grid;
     grid-template-columns: 1fr 1fr;
