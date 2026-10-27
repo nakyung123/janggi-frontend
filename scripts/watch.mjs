@@ -1,4 +1,4 @@
-// 바깥에서 보는 감시. GitHub Actions 가 15분마다 돌린다(.github/workflows/watch.yml).
+// 바깥에서 보는 감시. GitHub Actions 가 15분 간격으로 걸어 두고 돌린다(실제로는 더 드물다, .github/workflows/watch.yml).
 //
 //   node scripts/watch.mjs                 셋을 보고 결과만 찍는다(DB 는 빼고)
 //   node scripts/watch.mjs --db            DB 까지 본다
