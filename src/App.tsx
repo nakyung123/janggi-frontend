@@ -880,7 +880,7 @@ export default function App() {
   );
 
   return (
-    <div className="app">
+    <div className={"app" + (Page ? " on-page" : "")}>
       <SideNav
         menu={MENU}
         mode={mode}

@@ -362,6 +362,16 @@
   overscroll-behavior: contain;
 }
 
+/*
+ * 그때 헤더도 같은 폭(남은 폭 전체)을 쓴다. 헤더는 평소 판 덩어리 폭(--board-fit + 사이 +
+ * 패널)으로 가운데 서는데, 이 화면에는 판이 없어 마지막 대국 판의 폭에 묶여 있었다.
+ * 1920 에서 헤더 끝(로그인)과 화면 칸 끝이 164 어긋났다.
+ */
+.app.on-page .top {
+  width: auto;
+  margin-inline: 0;
+}
+
 .layout {
   flex: 1 1 auto;
   display: grid;
