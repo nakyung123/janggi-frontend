@@ -8,7 +8,7 @@
 // 판 크기라, 판 아래 한 줄(44px)은 그대로 판에서 빠진다. 가로는 판 옆이 남는다.
 
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
-import type { Mode } from "../layout/ModeTabs";
+import type { BoardMode } from "../../screens";
 
 /*
  * 아이콘은 Lucide(선 아이콘, 24 격자). 선 굵기 2 는 버튼 글자 굵기(500)와 맞춘 값이다.
@@ -21,7 +21,7 @@ import type { Mode } from "../layout/ModeTabs";
 const ICON = { size: 20, strokeWidth: 2, "aria-hidden": true } as const;
 
 interface Props {
-  mode: Mode;
+  mode: BoardMode;
   /** 지금 보고 있는 수의 번호 */
   cursor: number;
   /** 기보의 마지막 칸 번호 */

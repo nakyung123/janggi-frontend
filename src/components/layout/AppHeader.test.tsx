@@ -2,8 +2,8 @@
 //
 // 폰 헤더 - ☰ 메뉴와 로그인 자리
 //
-// 폭 900 이하에서는 탭과 업데이트 내역이 ☰ 메뉴로 들어간다. 그 메뉴가 조용히 깨지면
-// 폰에서는 **기보 탭으로 갈 길이 없어진다.** 넓은 화면의 탭은 그대로라 데스크톱에서
+// 폭 900 이하에서는 화면 목록과 업데이트 내역이 ☰ 메뉴에 있다. 그 메뉴가 조용히 깨지면
+// 폰에서는 **기보 탭으로 갈 길이 없어진다.** 넓은 화면의 왼쪽 메뉴는 따로 서 있어 데스크톱에서
 // 보면 아무 일도 없어 보인다. 그래서 메뉴로 하는 일을 여기서 하나씩 눌러 본다.
 //
 // 어느 폭에서 무엇이 보이는지는 CSS 가 정하고 jsdom 은 CSS 를 읽지 않는다. 여기서는
@@ -12,12 +12,14 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { SCREENS, menuOf } from "../../screens";
 import { AppHeader } from "./AppHeader";
 
 afterEach(cleanup);
 
 function 헤더(over: Partial<Parameters<typeof AppHeader>[0]> = {}) {
   const props = {
+    menu: menuOf(SCREENS),
     mode: "play" as const,
     onMode: vi.fn(),
     problems: null,

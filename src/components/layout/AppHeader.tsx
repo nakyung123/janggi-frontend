@@ -1,13 +1,14 @@
 // 헤더 한 줄
 //
-//   넓은 화면   앱 이름 · 모드 탭 ········ 판 상태 · 업데이트 내역
+//   넓은 화면   ································ 판 상태 · 로그인
 //   900 이하    ☰ · 앱 이름 ················ 판 상태 · 로그인
 //
-// 폰에서는 탭과 업데이트 내역을 ☰ 메뉴(MenuDrawer)로 옮기고 오른쪽 끝을 로그인에 준다.
-// 320 폭에 넷이 다 서지 않는다. 두 모양은 같은 요소를 CSS 로 숨기고 보여서 바꾼다
-// (layout.css 의 900 이하 규칙).
+// 화면 목록과 업데이트 내역은 메뉴에 있다. 넓은 화면은 왼쪽 메뉴(SideNav)에 늘 서 있고 앱
+// 이름도 거기 있다. 폰은 ☰ 로 여는 메뉴 칸(MenuDrawer)이다. 320 폭에 앱 이름 · 탭 ·
+// 업데이트 내역 · 로그인이 다 서지 않는다. 두 모양은 같은 요소를 CSS 로 숨기고 보여서
+// 바꾼다(layout.css 의 900 이하 규칙).
 //
-// 높이가 늘 모드 탭과 같은 40(터치 44)이다. 이 앱은 남는 세로가 곧 판 크기라,
+// 높이가 늘 40(터치 44)이다. 이 앱은 남는 세로가 곧 판 크기라,
 // 헤더에 무엇이 뜨고 져도 줄 높이는 바뀌지 않아야 한다.
 //
 // 둘 차례·생각 중은 여기서 말하지 않는다. 대국자 카드가 이미 말한다. 헤더에는 판이
@@ -21,12 +22,13 @@ import { useRef, useState } from "react";
 import { Menu } from "lucide-react";
 
 import { MenuDrawer } from "./MenuDrawer";
-import { ModeTabs } from "./ModeTabs";
-import type { Mode } from "./ModeTabs";
+import type { MenuGroup, ScreenId } from "../../screens";
 
 interface Props {
-  mode: Mode;
-  onMode: (mode: Mode) => void;
+  /** 메뉴 목록(screens.ts 의 menuOf). ☰ 메뉴가 그린다. */
+  menu: MenuGroup[];
+  mode: ScreenId;
+  onMode: (mode: ScreenId) => void;
   /** 판이 규칙에 맞지 않는 까닭들. 있으면 "잘못된 판" 을 건다. 까닭은 화면 읽기 줄(spoken)이 말한다. */
   problems: string[] | null;
   /** 화면 읽기 프로그램에 한 줄로 알릴 판 상태(장군·결과·잘못된 판) */
@@ -45,6 +47,7 @@ interface Props {
 }
 
 export function AppHeader({
+  menu,
   mode,
   onMode,
   problems,
@@ -78,21 +81,13 @@ export function AppHeader({
         <Menu size={20} strokeWidth={2} aria-hidden="true" />
       </button>
       <h1>장기 AI</h1>
-      <ModeTabs mode={mode} onMode={onMode} />
 
       <div className="top-end">
         {problems && (
           <span className="turn-tag">잘못된 판</span>
         )}
         {/*
-          그 자리에서 창을 연다. 한동안 따로 선 쪽(/updates/)을 새 탭으로 열었는데,
-          몇 줄 읽고 닫을 글 때문에 두던 화면을 떠나야 했다. 지금 버전은 창 안에 적혀 있다.
-        */}
-        <button type="button" className="ver" onClick={onUpdates}>
-          업데이트 내역
-        </button>
-        {/*
-          폰에서만 보인다. 확인하는 중에는 아무것도 세우지 않는다 - 로그인을 띄웠다가
+          확인하는 중에는 아무것도 세우지 않는다 - 로그인을 띄웠다가
           로그아웃으로 바꾸면 이미 로그인한 사람에게 잘못된 말을 한 번 한 셈이 된다.
           로그인은 단추가 아니라 링크다. 구글 동의 화면을 사람이 봐야 해서 쪽 전체가 옮겨간다.
           탈퇴는 여기 두지 않는다. 되돌리기 어려워 보이는 일이라 기보 탭에서 한 번 더 묻는다.
@@ -115,6 +110,7 @@ export function AppHeader({
 
       {menuOpen && (
         <MenuDrawer
+          menu={menu}
           mode={mode}
           onMode={onMode}
           onUpdates={onUpdates}

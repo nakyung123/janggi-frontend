@@ -138,7 +138,7 @@ export class AppPage {
     return this.page.getByRole("banner").getByRole("button", { name: "로그아웃" });
   }
 
-  /** ☰ 메뉴에서 기보 탭으로 간다. 폰에서는 모드 탭이 메뉴 안에 있다. */
+  /** ☰ 메뉴에서 기보 탭으로 간다. 폰에서는 화면 목록이 ☰ 메뉴 안에 있다. */
   async openGamesTab() {
     await this.page.getByRole("button", { name: "메뉴 열기" }).click();
     await this.page.getByRole("navigation", { name: "모드" }).getByRole("button", { name: "기보" }).click();

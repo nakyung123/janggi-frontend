@@ -5,9 +5,11 @@
 // 중 하나를 가리킨다. 두던 판은 대국 탭만 만지고, 기보 탭은 연 판을 읽기만 한다.
 //
 // 여기서 하는 일
+//   · 화면 고르기 — 메뉴 목록(screens.ts)의 화면 하나. 대국·기보는 여기서 그리고, 나머지는
+//     목록에 적힌 컴포넌트를 헤더 아래에 세운다
 //   · 두던 판 — 수 두기, 엔진 차례, 무르기, 새 대국·기권, 끝난 판을 기보 목록에 넣기
 //   · 기보 탭 — 판 열기, 복기, 파일로 저장·불러오기
-//   · 화면 — 헤더 / 판 칸(판, 폰에서는 위아래 대국자 카드) / 오른쪽 칸(대국자 카드,
+//   · 화면 — 왼쪽 메뉴(넓은 화면) / 헤더 / 판 칸(판, 폰에서는 위아래 대국자 카드) / 오른쪽 칸(대국자 카드,
 //     판 조작 줄, 대국 패널 또는 복기·형세·기보)
 //
 // 규칙 판정은 엔진에 묻고(janggi/status.ts), 시계·복기·기보 목록 저장·판 크기 재기는
@@ -28,8 +30,8 @@ import { ReviewPanel } from "./components/games/ReviewPanel";
 import { AppHeader } from "./components/layout/AppHeader";
 import { BootScreen } from "./components/layout/BootScreen";
 import { NoticeDialog } from "./components/layout/NoticeDialog";
+import { SideNav } from "./components/layout/SideNav";
 import { UpdatesDialog } from "./components/layout/UpdatesDialog";
-import type { Mode } from "./components/layout/ModeTabs";
 import { GameOverDialog } from "./components/play/GameOverDialog";
 import { PlayPanel } from "./components/play/PlayPanel";
 
@@ -87,9 +89,18 @@ import {
 } from "./janggi/status";
 import type { Outcome } from "./janggi/status";
 
+import { SCREENS, menuOf } from "./screens";
+import type { ScreenId } from "./screens";
+
+/** 메뉴 두 곳(폰 ☰ · 왼쪽 메뉴)이 그리는 목록. */
+const MENU = menuOf(SCREENS);
+
 export default function App() {
   const { engine, status, progress, error } = useEngine();
-  const [mode, setMode] = useState<Mode>("play");
+  const [mode, setMode] = useState<ScreenId>("play");
+  const screen = SCREENS.find((s) => s.id === mode);
+  /** 목록에 적힌 컴포넌트로 서는 화면. 대국·기보면 null 이다(판은 여기서 그린다). */
+  const Page = screen && "Component" in screen ? screen.Component : null;
   const narrow = useNarrow();
 
   // --- 두던 판 (대국 탭) --------------------------------------------------
@@ -669,7 +680,7 @@ export default function App() {
   /** 판을 끝내는 두 동작(새 대국·기권)은 확인 창으로 한 번 더 묻는다. */
   const [asking, setAsking] = useState<"new" | "resign" | null>(null);
 
-  /** 헤더의 '업데이트 내역' 으로 여는 창. 두던 판은 그대로 있다. */
+  /** 메뉴의 '업데이트 내역' 으로 여는 창. 두던 판은 그대로 있다. */
   const [updatesOpen, setUpdatesOpen] = useState(false);
   const [noticeOpen, setNoticeOpen] = useState(false);
 
@@ -680,7 +691,7 @@ export default function App() {
    * 동안에는 엔진을 복기가 쥐고 있으므로 옮기지 않는다.
    */
   const goMode = useCallback(
-    (next: Mode) => {
+    (next: ScreenId) => {
       if (review.running) return;
       setMode(next);
       archive.reset();
@@ -749,8 +760,8 @@ export default function App() {
       }),
       [cursor, goTo, history.length, flip]
     ),
-    // 창이 떠 있거나 목록 화면·복기 중에는 키를 가로채지 않는다.
-    !review.running && !listView && asking === null && !resultOpen
+    // 창이 떠 있거나 판이 없는 화면(목록·메뉴의 다른 화면)·복기 중에는 키를 가로채지 않는다.
+    !review.running && !listView && !Page && asking === null && !resultOpen
   );
 
   // --- 복기 -------------------------------------------------------------
@@ -800,7 +811,7 @@ export default function App() {
     );
   }, [checkers, position]);
 
-  const tableRef = useBoardFit(status === "ready" && !listView);
+  const tableRef = useBoardFit(status === "ready" && !listView && !Page);
 
   // --- 대국자 카드 ------------------------------------------------------
 
@@ -846,10 +857,10 @@ export default function App() {
   );
 
   // 판이 규칙에 맞지 않을 때(불러온 기보가 이상할 때)만 헤더가 "잘못된 판" 을 건다.
-  const problems = gstatus.kind === "invalid" && !listView ? gstatus.problems : null;
+  const problems = gstatus.kind === "invalid" && !listView && !Page ? gstatus.problems : null;
 
   // 눈으로는 대국자 카드와 헤더가 말하는 것을 화면 읽기 프로그램에 한 줄로 알린다.
-  const spoken = listView
+  const spoken = listView || Page
     ? ""
     : shownOutcome
       ? outcomeMessage(shownOutcome)
@@ -870,7 +881,15 @@ export default function App() {
 
   return (
     <div className="app">
+      <SideNav
+        menu={MENU}
+        mode={mode}
+        onMode={goMode}
+        onUpdates={() => setUpdatesOpen(true)}
+        onNotice={() => setNoticeOpen(true)}
+      />
       <AppHeader
+        menu={MENU}
         mode={mode}
         onMode={goMode}
         problems={problems}
@@ -887,7 +906,11 @@ export default function App() {
         {notice}
       </p>
 
-      {listView ? (
+      {Page ? (
+        <main className="page">
+          <Page />
+        </main>
+      ) : listView ? (
         <main className="layout list">
           <GameList
             rows={server.rows}
@@ -949,7 +972,7 @@ export default function App() {
             )}
 
             <BoardControls
-              mode={mode}
+              mode={mode === "games" ? "games" : "play"}
               cursor={cursor}
               last={history.length - 1}
               canPass={canTouchBoard && touch.passSquare !== null}
@@ -1021,7 +1044,7 @@ export default function App() {
         찾아 헤매게 하면 제보가 오지 않는다. 지금 보고 있는 판을 같이 담아 준다.
       */}
       <FeedbackButton
-        detail={`${mode === "play" ? "대국" : "기보"} · ${history.length - 1}수 · ${entry.fen}`}
+        detail={`${screen?.label ?? mode} · ${history.length - 1}수 · ${entry.fen}`}
       />
 
       {/* 결과 창은 대국 탭에서 판이 끝나는 순간에만 뜬다. 기보 탭에서 끝난 판을 열 때는 뜨지 않는다. */}

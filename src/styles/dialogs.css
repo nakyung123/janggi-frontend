@@ -137,57 +137,7 @@
   font-weight: 700;
 }
 
-.drawer-modes {
-  display: flex;
-  flex-direction: column;
-  padding-bottom: 8px;
-  margin-bottom: 8px;
-  border-bottom: 1px solid var(--line);
-}
-
-/*
- * 항목은 칸 폭을 꽉 채우는 줄이다. 글자 왼쪽 끝은 12 - 닫기 아이콘의 왼쪽 끝,
- * 그리고 헤더에서 판의 왼쪽 끝과 같은 줄이다.
- */
-.drawer-item,
-.drawer-sub {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  width: 100%;
-  padding: 0 12px;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  text-align: left;
-  text-decoration: none;
-}
-
-.drawer-item {
-  min-height: 48px;
-  font-size: var(--fs-base);
-  color: var(--text);
-}
-
-/* 지금 탭. 분절 버튼의 고른 칸처럼 바탕과 굵기가 함께 말한다. */
-.drawer-item.active {
-  background: var(--panel-2);
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.drawer-sub {
-  min-height: 44px;
-  color: var(--text-sub);
-  font-weight: 400;
-}
-
-@media (hover: hover) {
-  .drawer-item:hover:not(:disabled),
-  .drawer-sub:hover {
-    background: var(--panel-2);
-  }
-}
+/* 메뉴 칸 안의 항목(대국 · 기보 · 업데이트 내역 …)은 왼쪽 메뉴와 같은 모양이다(layout.css 의 메뉴 항목). */
 
 /* 손가락으로 누를 때 ☰ 는 44 이고 12 내밀어 왼쪽 0 에 선다. 닫기도 같은 자리에. */
 @media (pointer: coarse) {
