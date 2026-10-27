@@ -79,7 +79,7 @@ export function PlayerCard(props: Props) {
       */}
       {ratio !== null ? (
         <span className="time-bar" aria-hidden="true">
-          <i style={{ width: `${ratio * 100}%` }} />
+          <i style={{ transform: `translateX(${(ratio - 1) * 100}%)` }} />
         </span>
       ) : (
         // 잡아낸 기물. 상대 기물이라 색도 상대 색으로 새긴다.

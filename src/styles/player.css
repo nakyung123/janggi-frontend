@@ -348,6 +348,10 @@
  *
  * 시계는 200ms 마다 깎이니 그대로 두면 막대가 초당 다섯 번 툭툭 끊긴다.
  * 같은 길이의 transition 을 걸어 그 사이를 잇는다.
+ *
+ * 폭을 줄이지 않고 꽉 찬 막대를 왼쪽으로 민다(PlayerCard 의 translateX). 넘친 몫은
+ * 바깥 칸이 잘라 내서 양 끝이 둥근 모양은 같다. 폭으로 움직이면 대국 내내 막대가 쉬지
+ * 않아 매 프레임 레이아웃을 다시 한다 - 10초에 약 595번(CPU 4배 느린 320 폭)이었다.
  */
 .time-bar {
   display: block;
@@ -372,7 +376,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  transition: width 0.2s linear;
+  transition: transform 0.2s linear;
   /* 둘 차례가 아닌 쪽은 눌러둔다. 카드 전체를 눌러두는 것과 같은 이치다. */
   opacity: 0.4;
 }
