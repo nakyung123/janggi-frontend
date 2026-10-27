@@ -6,8 +6,12 @@
 //
 // **서버에 올라간 판만 센다.** 로그인 전에 둔 판은 서버에 안 올라간다. 그 판까지 세면
 // 기기마다 점수가 달라진다. 서버에 있는 판만 세면 어느 기기에서나 같다(2026-10-27 사용자
-// 결정). 결과 모양은 서버가 계산하는 길(docs/report-stats.md 5절)의 응답과 같게 둔다 -
-// 나중에 서버로 옮겨도 화면이 그대로다.
+// 결정). 그래서 **서버 목록을 못 받았으면 계산하지 않는다** - 이 기기의 판만으로 낸 숫자는
+// 진짜 점수처럼 보이지만 아니다.
+//
+// 결과 모양(PlayerStats)은 서버가 계산해 JSON 으로 내려 주는 경우에도 그대로 쓸 수 있게
+// 칸 이름과 값만으로 두었다. 다른 기기에서만 복기한 판까지 세야 할 날 계산을 서버로 옮겨도
+// 화면은 바뀌지 않는다. 그 길을 지금 고르지 않은 까닭은 docs/DECISIONS.md 에 있다.
 //
 // **점수는 저장하지 않는다.** 볼 때마다 처음부터 다시 센다. 같은 기보면 언제나 같은 점수다.
 // 판을 지우면 다음에 볼 때 그 판 없이 다시 계산된다.
@@ -145,13 +149,26 @@ export interface PlayerStats {
   byLevel: LevelRecord[];
   /** 복기한 판만. 오래된 판부터. */
   accuracy: AccuracyPoint[];
-  /** 복기한 판만. 오래된 판부터. */
+  /** 복기한 판 중 내가 둔 수가 있는 판만(정확도와 같은 판). 오래된 판부터. */
   mistakes: MistakeCount[];
 }
 
+/**
+ * 계산 결과. 셀 수 없을 때는 숫자 대신 그 까닭을 준다.
+ *
+ * - `no-server-list`: 서버 목록을 못 받았다(아직 받는 중이거나 실패). 이 기기의 판만으로
+ *   점수를 내지 않는다. 판이 0개인 것(`ok` 이고 `counted: 0`)과 다르다.
+ */
+export type StatsResult =
+  | { status: "ok"; stats: PlayerStats }
+  | { status: "no-server-list" };
+
 export interface StatsInput {
-  /** 서버 목록(`GET /games`). */
-  server: readonly ServerSummary[];
+  /**
+   * 서버 목록(`GET /games`). **못 받았으면 `null`** 이다 - 빈 목록(`[]`)은 "서버에 판이
+   * 없다" 는 뜻이라 둘을 섞으면 실패가 0판으로 보인다.
+   */
+  server: readonly ServerSummary[] | null;
   /** 이 기기의 기보. 복기 내용은 여기에만 있다. */
   local: readonly ArchivedGame[];
   /**
@@ -186,9 +203,9 @@ function countable(
  * 순서는 끝난 때, 같으면 clientId. 끝난 때는 브라우저 시각이라 기기 시계가 틀리면 순서가
  * 틀린다 - 점수가 몇 점 달라질 뿐 계산이 깨지지는 않는다.
  */
-function collect(input: StatsInput): CountedGame[] {
+function collect(server: readonly ServerSummary[], input: StatsInput): CountedGame[] {
   const byId = new Map<string, CountedGame | null>();
-  for (const s of input.server) {
+  for (const s of server) {
     byId.set(
       s.clientId,
       countable(s.clientId, s.endedAt, s.mySide, s.levelId, s.resultKind, s.resultWinner)
@@ -257,29 +274,33 @@ function mistakesOf(game: CountedGame, local: ArchivedGame): MistakeCount {
 /**
  * 전적 화면에 보일 숫자를 한 번에 낸다.
  *
- * 정확도와 실수 횟수는 **점수에 센 판 중에서 이 기기에 복기가 있는 판**으로만 낸다. 서버
- * 목록에는 "복기했나" 만 있고 내용이 없어서, 다른 기기에서만 복기한 판은 빠진다(사용자가
- * 받아들인 것). 점수에 안 세는 판(불러온 기보 등)은 복기가 있어도 넣지 않는다 - 한 화면의
- * 숫자가 모두 같은 판 묶음에서 나와야 서로 견줄 수 있다.
+ * 정확도와 실수 횟수는 **점수에 센 판 중에서 이 기기에 복기가 있고 내가 둔 수가 그
+ * 복기에 있는 판**으로만 낸다. 서버 목록에는 "복기했나" 만 있고 내용이 없어서, 다른
+ * 기기에서만 복기한 판은 빠진다(사용자가 받아들인 것). 점수에 안 세는 판(불러온 기보 등)은
+ * 복기가 있어도 넣지 않는다 - 한 화면의 숫자가 모두 같은 판 묶음에서 나와야 서로 견줄 수
+ * 있다. 내가 둔 수가 없는 판은 둘 다에서 뺀다 - "큰 실수 0회" 로 넣으면 표본 0 이 0 으로 보인다.
  */
-export function computeStats(input: StatsInput): PlayerStats {
-  const games = collect(input);
+export function computeStats(input: StatsInput): StatsResult {
+  if (input.server === null) return { status: "no-server-list" };
+  const games = collect(input.server, input);
   const localById = new Map(input.local.map((g) => [g.id, g]));
   const reviewed = games.flatMap((g) => {
     const local = localById.get(g.clientId);
-    return local?.reviewed ? [{ game: g, local }] : [];
+    if (!local?.reviewed) return [];
+    const value = accuracyOf(local.reviewed, g.mySide);
+    return value === null ? [] : [{ game: g, local, value }];
   });
 
   return {
-    counted: games.length,
-    rating: rate(games),
-    byLevel: byLevel(games),
-    accuracy: reviewed.flatMap(({ game, local }) => {
-      const value = accuracyOf(local.reviewed!, game.mySide);
-      return value === null
-        ? []
-        : [{ clientId: game.clientId, endedAt: game.endedAt, levelId: game.levelId, value }];
-    }),
-    mistakes: reviewed.map(({ game, local }) => mistakesOf(game, local)),
+    status: "ok",
+    stats: {
+      counted: games.length,
+      rating: rate(games),
+      byLevel: byLevel(games),
+      accuracy: reviewed.map(({ game, value }) => ({
+        clientId: game.clientId, endedAt: game.endedAt, levelId: game.levelId, value,
+      })),
+      mistakes: reviewed.map(({ game, local }) => mistakesOf(game, local)),
+    },
   };
 }
