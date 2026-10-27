@@ -22,12 +22,6 @@
   text-align: center;
 }
 
-.boot h1 {
-  font-size: var(--fs-xl);
-  font-weight: 700;
-  margin-bottom: 16px;
-}
-
 .boot-bar {
   height: 8px;
   background: var(--panel-2);

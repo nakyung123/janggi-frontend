@@ -1,7 +1,8 @@
 // 로딩 화면 — 엔진과 신경망을 내려받는 동안, 또는 엔진을 띄우지 못했을 때
 //
 // 엔진이 준비되기 전에는 판을 그리지 않는다. 합법수·장군을 엔진이 알려 줘야 둘 수
-// 있어서, 판이 먼저 떠도 누를 수 있는 것이 없다.
+// 있어서, 판이 먼저 떠도 누를 수 있는 것이 없다. App 이 헤더와 메뉴 아래 판 자리에
+// 세운다 - 앱 이름(h1)은 헤더에 있다.
 
 import type { LoadProgress } from "../../engine/types";
 import {
@@ -58,7 +59,6 @@ export function BootScreen({ failed, progress, error }: Props) {
     const outside = outsideBrowserLink(navigator.userAgent, window.location.href);
     return (
       <div className="boot">
-        <h1>장기 AI</h1>
         <div className="boot-error">
           {/*
             **무엇이** 안 됐는지는 늘 여기서 말한다.
@@ -107,7 +107,6 @@ export function BootScreen({ failed, progress, error }: Props) {
 
   return (
     <div className="boot">
-      <h1>장기 AI</h1>
       <p className="muted">
         {progress?.stage ?? "엔진"} 준비 중…
         {progress && progress.total > 0 && (

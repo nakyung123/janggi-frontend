@@ -749,6 +749,12 @@ export default function App() {
     기기에서열기(id);
   };
 
+  /**
+   * 판이 서 있는지. 엔진이 뜨기 전에는 판 자리에 로딩 화면이 서고, 목록 화면·기보 목록에는
+   * 판이 없다.
+   */
+  const onBoard = status === "ready" && !listView && !Page;
+
   useKeyboard(
     useMemo(
       () => ({
@@ -760,8 +766,8 @@ export default function App() {
       }),
       [cursor, goTo, history.length, flip]
     ),
-    // 창이 떠 있거나 판이 없는 화면(목록·메뉴의 다른 화면)·복기 중에는 키를 가로채지 않는다.
-    !review.running && !listView && !Page && asking === null && !resultOpen
+    // 창이 떠 있거나 판이 없는 화면(로딩·목록·메뉴의 다른 화면)·복기 중에는 키를 가로채지 않는다.
+    onBoard && !review.running && asking === null && !resultOpen
   );
 
   // --- 복기 -------------------------------------------------------------
@@ -811,7 +817,7 @@ export default function App() {
     );
   }, [checkers, position]);
 
-  const tableRef = useBoardFit(status === "ready" && !listView && !Page);
+  const tableRef = useBoardFit(onBoard);
 
   // --- 대국자 카드 ------------------------------------------------------
 
@@ -857,10 +863,10 @@ export default function App() {
   );
 
   // 판이 규칙에 맞지 않을 때(불러온 기보가 이상할 때)만 헤더가 "잘못된 판" 을 건다.
-  const problems = gstatus.kind === "invalid" && !listView && !Page ? gstatus.problems : null;
+  const problems = gstatus.kind === "invalid" && onBoard ? gstatus.problems : null;
 
   // 눈으로는 대국자 카드와 헤더가 말하는 것을 화면 읽기 프로그램에 한 줄로 알린다.
-  const spoken = listView || Page
+  const spoken = !onBoard
     ? ""
     : shownOutcome
       ? outcomeMessage(shownOutcome)
@@ -868,9 +874,11 @@ export default function App() {
 
   // --- 화면 -------------------------------------------------------------
 
-  if (status !== "ready") {
-    return <BootScreen failed={status === "error"} progress={progress} error={error} />;
-  }
+  /*
+   * 엔진이 뜨기 전에도 헤더와 메뉴는 선다. 로딩·실패 화면은 판 자리(대국·기보)에만 서고,
+   * 엔진을 쓰지 않는 목록 화면은 엔진을 기다리지 않고, 엔진이 못 떠도 열린다.
+   */
+  const booting = status !== "ready" && !Page;
 
   const thinking = engineTurn && Boolean(snapshot?.running);
 
@@ -880,7 +888,7 @@ export default function App() {
   );
 
   return (
-    <div className={"app" + (Page ? " on-page" : "")}>
+    <div className={"app" + (Page || booting ? " on-page" : "")}>
       <SideNav
         menu={MENU}
         mode={mode}
@@ -909,6 +917,10 @@ export default function App() {
       {Page ? (
         <main className="page">
           <Page />
+        </main>
+      ) : booting ? (
+        <main className="page">
+          <BootScreen failed={status === "error"} progress={progress} error={error} />
         </main>
       ) : listView ? (
         <main className="layout list">
@@ -1042,10 +1054,13 @@ export default function App() {
       {/*
         제보 버튼. 어느 탭에서나 같은 자리에 있다 - 사고는 어디서든 나고, 그때
         찾아 헤매게 하면 제보가 오지 않는다. 지금 보고 있는 판을 같이 담아 준다.
+        엔진이 못 뜬 화면은 진단 줄을 담은 제 버튼(BootScreen)을 쓴다.
       */}
-      <FeedbackButton
-        detail={`${screen?.label ?? mode} · ${history.length - 1}수 · ${entry.fen}`}
-      />
+      {!booting && (
+        <FeedbackButton
+          detail={`${screen?.label ?? mode} · ${history.length - 1}수 · ${entry.fen}`}
+        />
+      )}
 
       {/* 결과 창은 대국 탭에서 판이 끝나는 순간에만 뜬다. 기보 탭에서 끝난 판을 열 때는 뜨지 않는다. */}
       {mode === "play" && resultOpen && outcome && (

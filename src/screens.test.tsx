@@ -30,6 +30,24 @@ vi.mock("./engine/engine", async () => ({
 
 vi.mock("./report/events", () => ({ track: () => {} }));
 
+/*
+ * 엔진 상태를 시험마다 바꿔 끼운다. 진짜 훅은 늘 부른다(훅 순서를 지키려고). 덮을 값이
+ * 없으면 진짜 값이 그대로 나간다. 가짜 엔진을 늦추거나 실패시키는 길은 쓰지 않았다 -
+ * useEngine 은 엔진을 모듈에 한 번 만들어 두어서 앞 시험이 띄운 엔진이 그대로 남는다.
+ */
+const 엔진덮기 = vi.hoisted(() => ({ state: null as null | { status: "loading" | "error"; error: string | null } }));
+vi.mock("./engine/useEngine", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./engine/useEngine")>();
+  return {
+    ...real,
+    useEngine: () => {
+      const got = real.useEngine();
+      const over = 엔진덮기.state;
+      return over ? { ...got, engine: null, progress: null, evalMode: null, ...over } : got;
+    },
+  };
+});
+
 vi.mock("./screens", async (importOriginal) => {
   const real = await importOriginal<typeof import("./screens")>();
   return {
@@ -45,8 +63,12 @@ vi.mock("./screens", async (importOriginal) => {
 beforeEach(() => {
   localStorage.clear();
   FakeEngine.current.reset();
+  엔진덮기.state = null;
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 async function start() {
   render(<App />);
@@ -101,6 +123,38 @@ describe("메뉴 목록에 한 줄", () => {
     fireEvent.click(within(폰메뉴()).getByRole("button", { name: "임시 둘" }));
     expect(screen.getByText("임시 둘 화면")).toBeTruthy();
     expect(screen.queryByRole("dialog", { name: "메뉴" })).toBeNull();
+  });
+});
+
+describe("엔진이 뜨기 전", () => {
+  it("내려받는 동안에도 메뉴가 서고, 목록 화면은 엔진을 기다리지 않고 열린다", () => {
+    엔진덮기.state = { status: "loading", error: null };
+    render(<App />);
+    expect(screen.getByText(/준비 중/)).toBeTruthy();
+    expect(screen.queryByRole("grid", { name: "장기판" })).toBeNull();
+
+    fireEvent.click(within(왼쪽메뉴()).getByRole("button", { name: "임시 하나" }));
+    expect(screen.getByText("임시 하나 화면")).toBeTruthy();
+    expect(screen.queryByText(/준비 중/)).toBeNull();
+
+    fireEvent.click(within(왼쪽메뉴()).getByRole("button", { name: "대국" }));
+    expect(screen.getByText(/준비 중/)).toBeTruthy();
+  });
+
+  it("엔진을 띄우지 못해도 목록 화면은 열리고, 판 자리에는 실패 글이 남는다", () => {
+    엔진덮기.state = { status: "error", error: "메모리가 모자랍니다." };
+    // 실패 화면의 진단 줄이 읽는다. jsdom 에는 없다.
+    vi.stubGlobal("crossOriginIsolated", false);
+    render(<App />);
+    expect(screen.getByText("장기판을 띄우지 못했습니다.")).toBeTruthy();
+    expect(screen.queryByRole("grid", { name: "장기판" })).toBeNull();
+
+    fireEvent.click(within(폰메뉴()).getByRole("button", { name: "임시 둘" }));
+    expect(screen.getByText("임시 둘 화면")).toBeTruthy();
+
+    // 기보 자리도 판 자리다. 엔진 없이 빈 판이나 목록으로 때우지 않는다.
+    fireEvent.click(within(왼쪽메뉴()).getByRole("button", { name: "기보" }));
+    expect(screen.getByText("장기판을 띄우지 못했습니다.")).toBeTruthy();
   });
 });
 
