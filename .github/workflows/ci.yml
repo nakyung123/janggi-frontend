@@ -80,9 +80,6 @@ jobs:
   # 가짜로 바꿔 끼우므로, 엔진(WASM)이 브라우저에서 뜨는지는 여기서만 본다.
   e2e:
     runs-on: ubuntu-latest
-    # 새로 만든 E2E 라 간헐 실패가 줄 때까지 이 작업이 실패해도 CI 전체를 막지 않는다.
-    # 작업 목록에는 실패로 보인다. 연속 10번 통과하면 이 줄을 지운다.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
