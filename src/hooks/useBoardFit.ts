@@ -1,11 +1,9 @@
 // 판 크기 재기 — 판을 그린 뒤 크기를 재서 CSS 변수로 넘긴다
 //
 // 판은 남은 높이에 맞춰 크기가 정해지므로 CSS 만으로는 판의 폭을 알 수 없다. 다 그린
-// 뒤에 재서 .app 에 셋을 건다.
+// 뒤에 재서 .app 에 둘을 건다.
 //
 //   --board-w    그려진 판의 폭. 폰에서 판 위아래 대국자 카드가 판과 같은 폭으로 선다.
-//   --board-h    그려진 판의 높이. 대국 탭 오른쪽 칸의 아래 끝을 판 아래 끝에 맞춘다
-//                (layout.css 의 .side-col.play).
 //   --board-fit  판이 들어갈 수 있는 폭. 헤더와 판·패널 덩어리의 폭을 정한다
 //                (layout.css 의 .top / .layout).
 //
@@ -50,7 +48,6 @@ export function useBoardFit(shown: boolean) {
     const measure = () => {
       const drawn = svg.getBoundingClientRect();
       host.style.setProperty("--board-w", `${Math.ceil(drawn.width)}px`);
-      host.style.setProperty("--board-h", `${Math.floor(drawn.height)}px`);
       const viewport = `${window.innerWidth}x${window.innerHeight}`;
       if (viewport !== fitFor) {
         fitFor = viewport;
