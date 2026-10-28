@@ -60,6 +60,13 @@ function clientIdOf(req, form) {
 }
 
 createServer(async (req, res) => {
+  /*
+   * 연결을 다시 쓰지 않는다. Node 의 http 서버는 쉬는 연결을 6초(keepAliveTimeout 5초 +
+   * keepAliveTimeoutBuffer 1초) 뒤에 닫는데, 시험이 같은 요청 문맥으로 마침 그때 다시 보내면
+   * 닫히는 연결에 실려 read ECONNRESET 으로 끝났다. 두 요청 사이를 5990~6010ms 로 두고 90번
+   * 보내니 18번 났다(5900·5960·6100 은 0번). 시험용 서버라 요청마다 새 연결을 열어도 잃는 것이 없다.
+   */
+  res.setHeader("Connection", "close");
   const url = new URL(req.url, ISSUER);
   try {
     if (req.method === "GET" && url.pathname === "/.well-known/openid-configuration") {

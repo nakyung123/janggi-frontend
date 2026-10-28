@@ -157,44 +157,37 @@ export function GameList(props: Props) {
       </div>
 
       {/*
-        로그인 줄. 넓은 화면에서는 로그인이 여기에만 있다 - 로그인이 하는 일(기보를 기기
-        밖에도 남기기)이 이 탭의 일이다. 폭 900 이하에서는 헤더 오른쪽에 로그인이 있으므로
-        로그인 전의 이 줄은 통째로 숨긴다(games.css). 이메일과 이름은 보이지 않는다.
-        로그인됨 표시만 둔다.
+        로그인 줄. 로그인 뒤에만 선다 - 무엇이 달라졌는지와 로그아웃 · 탈퇴를 여기 둔다.
+        로그인 단추는 헤더 오른쪽에만 둔다(AppHeader.tsx). 같은 화면에 로그인 단추가 둘이면
+        어느 쪽을 눌러야 하는지 망설이게 된다.
+        이메일과 이름은 보이지 않는다. 로그인됨 표시만 둔다.
       */}
-      <div className={"games-login" + (server.loggedIn === false ? " signed-out" : "")}>
-        {server.loggedIn === null ? (
-          <span className="games-who">로그인 상태를 확인하는 중…</span>
-        ) : server.loggedIn ? (
-          <>
-            <span className="games-who">로그인됨 · 끝낸 판이 서버에도 남습니다</span>
-            <button type="button" className="ghost" onClick={server.signOut} disabled={server.busy}>
-              로그아웃
-            </button>
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => set탈퇴물음(true)}
-              disabled={server.busy}
-            >
-              탈퇴
-            </button>
-          </>
-        ) : (
-          /*
-            단추가 아니라 링크다. 구글 동의 화면을 사람이 봐야 하므로 쪽 전체가 옮겨갔다
-            돌아온다 - fetch 로는 안 되는 일이다.
-          */
-          <a className="games-signin" href={server.loginPath}>
-            구글로 로그인
-          </a>
-        )}
-      </div>
+      {server.loggedIn !== false && (
+        <div className="games-login">
+          {server.loggedIn === null ? (
+            <span className="games-who">로그인 상태를 확인하는 중…</span>
+          ) : (
+            <>
+              <span className="games-who">로그인됨 · 끝낸 판이 서버에도 남습니다</span>
+              <button type="button" className="ghost" onClick={server.signOut} disabled={server.busy}>
+                로그아웃
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => set탈퇴물음(true)}
+                disabled={server.busy}
+              >
+                탈퇴
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {/*
-        개인정보처리방침. **로그인을 누를지 정하는 줄 바로 아래 둔다** - 무엇이 서버로
-        가는지는 누르기 전에 읽을 수 있어야 한다. 꼬리말로 내리면 결정하는 자리에서
-        멀어진다.
+        개인정보처리방침. 서버에 기보를 남기는 일이 이 탭의 일이라, 무엇이 서버로 가는지를
+        이 탭에서 바로 읽을 수 있게 둔다(메뉴에도 있다).
 
         **새 탭으로 연다.** 방침은 public/ 에 그냥 둔 쪽이라 앱 밖이고, 같은 탭으로
         가면 두던 판을 떠나게 된다. about 쪽을 앱에서 안 잇기로 한 것과 같은 까닭이다.
