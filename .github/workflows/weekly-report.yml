@@ -1,0 +1,62 @@
+# 주간 지표(scripts/weekly.mjs --slack)를 매주 Slack 운영 채널(janggi-ops)에 올린다. 최근 7일과
+# 그 앞 7일을 견준 몇 줄짜리 요약이다. 뽑지 못하면 그렇다고 Slack 에 알리고 이 실행은 실패로 끝난다.
+#
+# 알아 둘 것
+# - 비밀 값 둘을 저장소 Actions secrets 에서 읽는다. STATS_TOKEN(운영 통계 토큰, GCP 비밀 저장소
+#   janggi-stats-token 과 같은 값), SLACK_WEBHOOK_OPS(janggi-ops 채널의 Incoming Webhook 주소).
+#   둘 다 찍지 않는다.
+# - GitHub 는 예약 실행을 될 때만 돌린다(watch.yml 머리 주석). 주간이라 몇 시간 늦어도 괜찮다.
+# - 손으로 돌리기: gh workflow run weekly-report.yml
+# - 끄려면: gh workflow disable weekly-report.yml
+name: weekly-report
+
+on:
+  schedule:
+    # 월요일 00:17 UTC = 한국 09:17. 정각을 피한다(GitHub 는 그 무렵 몰리는 예약을 늦추거나 건너뛴다).
+    - cron: "17 0 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: 지표 뽑기
+        id: weekly
+        env:
+          STATS_TOKEN: ${{ secrets.STATS_TOKEN }}
+        run: node scripts/weekly.mjs --slack > weekly.txt
+
+      # 뽑기가 실패해도 돈다. 실패면 요약 대신 실행 주소를 보낸다. 값은 명령 줄이 아니라 환경 변수로 받는다.
+      - name: Slack 에 올리기
+        if: always()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_OPS }}
+          RESULT: ${{ steps.weekly.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const out = fs.existsSync("weekly.txt") ? fs.readFileSync("weekly.txt", "utf8").trim() : "";
+            const ok = process.env.RESULT === "success" && out !== "";
+            // 요약은 제목 줄까지 weekly.mjs 가 만든다. 그대로 보낸다.
+            const text = ok
+              ? out
+              : ":warning: *[장기] 주간 지표를 뽑지 못했습니다*\n" + process.env.RUN_URL;
+            fetch(process.env.SLACK_WEBHOOK_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json; charset=utf-8" },
+              body: JSON.stringify({ text }),
+            }).then(async (r) => {
+              if (!r.ok) { console.error("Slack 이 받지 않았다: HTTP " + r.status + " " + (await r.text()).slice(0, 200)); process.exitCode = 1; }
+            });
+          '
