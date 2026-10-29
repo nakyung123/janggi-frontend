@@ -86,22 +86,35 @@ function sessionsOf(s, name) {
 }
 
 /**
+ * 바깥에서 온 글자를 Slack 글에 넣을 수 있게 다듬는다. "들어온 곳" 이름표는 측정 이벤트의
+ * ref 를 그대로 쓴 값이고, 측정 주소는 로그인 없이 누구나 부를 수 있다. 다듬지 않으면 꾸민
+ * 값이 채널 전체 알림(<!channel>), 보이는 글과 다른 링크, 가짜 굵은 줄이 되어 올라간다.
+ * Slack 문서대로 & < > 를 바꾸고, 줄바꿈·서식 글자(* _ ~ `)를 지우고, 길이를 자른다.
+ */
+function slackSafe(s, max = 40) {
+  const flat = String(s).replace(/[\u0000-\u001f\u007f*_~`]/g, " ").replace(/\s+/g, " ").trim();
+  const cut = [...flat].length > max ? [...flat].slice(0, max).join("") + "…" : flat;
+  return cut.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
  * Slack 용 요약. 표는 Slack 글꼴에서 열이 어긋나 읽기 어려워서, 사용자가 볼 숫자만 줄로 쓴다.
- * 표본이 0 이면 비율을 0% 로 쓰지 않고 "-" 로 둔다(pct).
+ * 표본이 0 이면 비율을 0% 로 쓰지 않고 "-" 로 둔다(pct). 깔때기 숫자는 판 수가 아니라 그 단계까지
+ * 간 방문 수다(한 방문에서 여러 판을 둬도 하나).
  */
 function slackText(week, prevSessions, prev) {
   const day = (iso) => new Date(iso).toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" }).slice(5).replace("-", "/");
   const moved = sessionsOf(week, "first_move");
   const e = week.engine;
-  const refs = week.referrers.slice(0, 3).map((r) => `${r.label} ${r.sessions}`).join(" · ");
+  const refs = week.referrers.slice(0, 3).map((r) => `${slackSafe(r.label)} ${r.sessions}`).join(" · ");
   return [
     `:bar_chart: *[장기] 주간 지표*  ${day(week.from)} ~ ${day(week.to)}`,
     `• 방문 *${week.sessions}*  (앞 주 ${prevSessions}, ${change(week.sessions, prevSessions)})`,
     `• 첫 수까지 둔 비율 *${pct(moved, week.sessions)}*  (앞 주 ${pct(prev("first_move"), prevSessions)})`,
-    `• 끝까지 둔 판 *${sessionsOf(week, "game_end")}* · 복기 *${sessionsOf(week, "review_open")}*`,
+    `• 한 판 끝까지 둔 방문 *${sessionsOf(week, "game_end")}* · 복기를 연 방문 *${sessionsOf(week, "review_open")}*`,
     `• 엔진 실패 *${sessionsOf(week, "engine_failed")}* · 엔진 뜨는 시간(중앙) *${e.n === 0 ? "표본 없음" : sec(e.p50)}*`,
     `• 많이 들어온 곳: ${refs || "없음"}`,
-    "_방문은 쪽을 연 횟수예요(사람 수 아님). 자세한 표는 root 에게 요청_",
+    "_방문은 쪽을 연 횟수예요(사람 수 아님). 자세한 표: node scripts/weekly.mjs_",
   ].join("\n");
 }
 
