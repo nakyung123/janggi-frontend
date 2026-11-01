@@ -135,6 +135,31 @@
   font-weight: 600;
 }
 
+/*
+ * 좌표 화면에서 누른 자리: 번호(24/700) + 가로줄·세로줄·기물. 누르기 전 안내 글과 높이가
+ * 같게 두어(번호 줄 높이 29) 누를 때 판이 밀리지 않는다 - 폰은 이 줄 바로 아래가 판이다.
+ */
+.learn-coord {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 12px;
+  min-height: 29px;
+}
+
+.learn-coord-num {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 기보 표기(73졸63)는 숫자 칸이라 자간을 0 으로 되돌린다(base.css 의 body 주석). */
+.learn-notation {
+  letter-spacing: 0;
+}
+
 /* 화면의 이름. 화면 안에서 가장 큰 글자다(24/700, DESIGN.md 의 display). */
 .learn-title {
   font-size: var(--fs-xl);
