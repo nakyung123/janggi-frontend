@@ -20,6 +20,7 @@ import { FakeEngine } from "../../test/fakeEngine";
 import { CoordsScreen } from "./CoordsScreen";
 import { PIECE_LESSONS } from "./pieceScenes";
 import { PiecesScreen } from "./PiecesScreen";
+import { RulesScreen } from "./RulesScreen";
 
 vi.mock("../../engine/engine", async () => ({
   JanggiEngine: (await import("../../test/fakeEngine")).FakeEngine,
@@ -252,6 +253,23 @@ describe("기물 화면 - 설명", () => {
   });
 });
 
+// --- 규칙 화면 ---------------------------------------------------------------
+
+describe("규칙 화면", () => {
+  it("상차림 넷 - 대국 화면의 단추 순서로, 날개마다 상이 안쪽인지 바깥쪽인지 적는다", () => {
+    render(<RulesScreen />);
+    const 상차림 = screen.getByRole("heading", { level: 3, name: "상차림" }).closest("section")!;
+    // 손으로 따졌다. 이름은 마·상 넷을 자기 왼쪽부터 읽은 것이고, 상이 사 옆이면 안쪽, 차 옆이면
+    // 바깥쪽이다. 예: 마상마상은 왼쪽 상이 사 옆, 오른쪽 상이 차 옆이다.
+    expect(within(상차림).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "마상상마: 상 둘이 안쪽",
+      "상마마상: 상 둘이 바깥쪽",
+      "마상마상: 오른쪽 상만 바깥쪽",
+      "상마상마: 왼쪽 상만 바깥쪽",
+    ]);
+  });
+});
+
 // --- 좌표 화면 ---------------------------------------------------------------
 
 /** 화면에 보이는 r 번째 가로줄(위에서 0)의 c 번째 교차점(왼쪽에서 0). 판을 뒤집으면 같이 뒤집힌다. */
@@ -259,6 +277,8 @@ const 보이는칸 = (r: number, c: number) =>
   within(within(판()).getAllByRole("row")[r]).getAllByRole("gridcell")[c];
 /** 누른 칸의 번호(두 자리 숫자). */
 const 나온번호 = () => within(screen.getByRole("status")).getByText(/^\d\d$/).textContent;
+/** 번호 옆 설명 줄. 두 숫자 중 어느 것이 가로줄이고 어느 것이 세로줄인지, 그 자리 기물. */
+const 나온설명 = () => within(screen.getByRole("status")).getByText(/^가로줄/).textContent;
 const 뒤집기 = () => fireEvent.click(screen.getByRole("button", { name: "판 뒤집기" }));
 
 /**
@@ -275,36 +295,34 @@ describe("좌표 화면", () => {
     expect(within(screen.getByRole("status")).queryByText(/^\d\d$/)).toBeNull();
   });
 
-  it("네 귀퉁이와 두 궁 자리 - 누르면 그 칸의 번호와 기물이 보인다", () => {
+  it("네 귀퉁이와 두 궁 자리 - 누르면 그 칸의 번호, 가로줄·세로줄, 기물이 보인다", () => {
     render(<CoordsScreen />);
     const 눌러서 = (r: number, c: number) => {
       fireEvent.pointerUp(보이는칸(r, c));
-      return 나온번호();
+      return [나온번호(), 나온설명()];
     };
-    expect(눌러서(0, 0)).toBe("11");
-    expect(눌러서(0, 8)).toBe("19");
-    expect(눌러서(9, 0)).toBe("01");
-    expect(눌러서(9, 8)).toBe("09");
-    expect(눌러서(8, 4)).toBe("95");
-    expect(within(screen.getByRole("status")).getByText(/초 궁/)).toBeTruthy();
-    expect(눌러서(1, 4)).toBe("25");
-    expect(within(screen.getByRole("status")).getByText(/한 궁/)).toBeTruthy();
+    expect(눌러서(0, 0)).toEqual(["11", "가로줄 1 · 세로줄 1 · 한 차"]);
+    expect(눌러서(0, 8)).toEqual(["19", "가로줄 1 · 세로줄 9 · 한 차"]);
+    expect(눌러서(9, 0)).toEqual(["01", "가로줄 0(열째) · 세로줄 1 · 초 차"]);
+    expect(눌러서(9, 8)).toEqual(["09", "가로줄 0(열째) · 세로줄 9 · 초 차"]);
+    expect(눌러서(8, 4)).toEqual(["95", "가로줄 9 · 세로줄 5 · 초 궁"]);
+    expect(눌러서(1, 4)).toEqual(["25", "가로줄 2 · 세로줄 5 · 한 궁"]);
   });
 
-  it("판을 뒤집으면 0 줄이 위로 가고, 같은 자리는 같은 번호다", () => {
+  it("판을 뒤집으면 0 줄이 위로 가고, 같은 자리는 같은 번호와 설명이다", () => {
     render(<CoordsScreen />);
     뒤집기();
     const 눌러서 = (r: number, c: number) => {
       fireEvent.pointerUp(보이는칸(r, c));
-      return 나온번호();
+      return [나온번호(), 나온설명()];
     };
-    expect(눌러서(0, 0)).toBe("09");
-    expect(눌러서(0, 8)).toBe("01");
-    expect(눌러서(9, 0)).toBe("19");
-    expect(눌러서(9, 8)).toBe("11");
-    // 초의 궁은 위에서 둘째 줄로 올라갔지만 번호는 그대로 95 다.
-    expect(눌러서(1, 4)).toBe("95");
-    expect(within(screen.getByRole("status")).getByText(/초 궁/)).toBeTruthy();
+    expect(눌러서(0, 0)).toEqual(["09", "가로줄 0(열째) · 세로줄 9 · 초 차"]);
+    expect(눌러서(0, 8)).toEqual(["01", "가로줄 0(열째) · 세로줄 1 · 초 차"]);
+    expect(눌러서(9, 0)).toEqual(["19", "가로줄 1 · 세로줄 9 · 한 차"]);
+    expect(눌러서(9, 8)).toEqual(["11", "가로줄 1 · 세로줄 1 · 한 차"]);
+    // 초의 궁은 위에서 둘째 줄로, 한의 궁은 아래에서 둘째 줄로 갔지만 번호는 그대로다.
+    expect(눌러서(1, 4)).toEqual(["95", "가로줄 9 · 세로줄 5 · 초 궁"]);
+    expect(눌러서(8, 4)).toEqual(["25", "가로줄 2 · 세로줄 5 · 한 궁"]);
   });
 
   it.each([false, true])("모든 칸 - 나온 번호가 좌표 읽는 법, 기보 표기(notation.ts)와 같다 (뒤집음: %s)", (뒤집음) => {
