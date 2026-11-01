@@ -87,7 +87,7 @@ export function PiecesScreen() {
       <div className="learn-main">
         <div className="learn-head">
           <h2 className="learn-title">기물</h2>
-          <p className="muted">초(초록)와 한(빨강)이 기물 16개씩을 갖고 둔다. 초가 먼저 둔다.</p>
+          <p className="muted">초(초록)와 한(빨강)이 기물 16개씩을 갖고 둡니다. 초가 먼저 둡니다.</p>
           <div className="seg learn-pieces" role="group" aria-label="기물">
             {PIECE_LESSONS.map((l) => (
               <button
@@ -144,7 +144,7 @@ export function PiecesScreen() {
             <button type="button" disabled={play.moves === 0} onClick={() => setPlay(fresh(scene))}>
               처음 자리로
             </button>
-            <span className="muted">점을 누르면 그리로 옮겨진다.</span>
+            <span className="muted">점을 누르면 그리로 옮겨집니다.</span>
           </div>
 
           <section className="panel">

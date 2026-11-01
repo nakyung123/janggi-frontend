@@ -22,10 +22,10 @@ const notationOf = (move: string) => describeMove(move, START).short;
 
 /** 기보 읽기 예. 수(엔진 좌표) · 무엇을 했나. 표기 자체는 위 함수가 만든다. */
 const EXAMPLES: [string, string][] = [
-  ["c4c5", "7번째 줄 3번째 세로줄의 졸이 6번째 줄로 한 칸 나왔다(초)."],
-  ["c7c6", "4번째 줄 3번째 세로줄의 병이 5번째 줄로 한 칸 나왔다(한)."],
-  ["b10c8", "한의 마가 12 에서 33 으로 갔다."],
-  ["e2e3", "초의 궁이 95 에서 85 로 한 칸 올라갔다."],
+  ["c4c5", "7번째 줄 3번째 세로줄의 졸이 6번째 줄로 한 칸 나왔습니다(초)."],
+  ["c7c6", "4번째 줄 3번째 세로줄의 병이 5번째 줄로 한 칸 나왔습니다(한)."],
+  ["b10c8", "한의 마가 12 에서 33 으로 갔습니다."],
+  ["e2e3", "초의 궁이 95 에서 85 로 한 칸 올라갔습니다."],
 ];
 
 export function CoordsScreen() {
@@ -37,9 +37,9 @@ export function CoordsScreen() {
       <div className="learn-main">
         <div className="learn-head">
           <h2 className="learn-title">좌표</h2>
-          <p className="muted">기보의 숫자 두 자리가 판의 어느 자리인지 눌러서 볼 수 있다.</p>
+          <p className="muted">기보의 숫자 두 자리가 판의 어느 자리인지 눌러서 볼 수 있습니다.</p>
           <output className="learn-coord">
-            {picked ? <Picked square={picked} /> : <span className="muted">판의 교차점을 누른다.</span>}
+            {picked ? <Picked square={picked} /> : <span className="muted">판의 교차점을 누르면 번호가 나옵니다.</span>}
           </output>
         </div>
 
@@ -68,25 +68,25 @@ export function CoordsScreen() {
           <section className="panel learn-sections">
             <section>
               <h3 className="learn-section-title">읽는 법</h3>
-              <p>이 앱의 기보는 숫자 두 자리로 자리를 적는다.</p>
+              <p>이 앱의 기보는 숫자 두 자리로 자리를 적습니다.</p>
               <ul className="learn-list">
-                <li>초가 아래에 앉은 판을 기준으로 한다.</li>
-                <li>앞 숫자는 가로줄이다. 위(한 쪽)에서부터 1, 2, … 9 이고, 맨 아래 열째 줄은 0 이다.</li>
-                <li>뒤 숫자는 세로줄이다. 왼쪽에서부터 1 ~ 9 다.</li>
-                <li>그래서 초의 궁은 95, 한의 궁은 25 에서 시작한다.</li>
+                <li>초가 아래에 앉은 판을 기준으로 합니다.</li>
+                <li>앞 숫자는 가로줄입니다. 위(한 쪽)에서부터 1, 2, … 9 이고, 맨 아래 열째 줄은 0 입니다.</li>
+                <li>뒤 숫자는 세로줄입니다. 왼쪽에서부터 1 ~ 9 입니다.</li>
+                <li>그래서 초의 궁은 95, 한의 궁은 25 에서 시작합니다.</li>
               </ul>
-              <p>판을 뒤집어 보아도 숫자는 바뀌지 않는다. 뒤집은 판에서는 0 줄이 위에, 1 줄이 아래에 온다.</p>
+              <p>판을 뒤집어 보아도 숫자는 바뀌지 않습니다. 뒤집은 판에서는 0 줄이 위에, 1 줄이 아래에 옵니다.</p>
             </section>
             <section>
               <h3 className="learn-section-title">한 수 읽기</h3>
-              <p>한 수는 "출발 자리 + 기물 + 도착 자리" 로 적는다.</p>
+              <p>한 수는 "출발 자리 + 기물 + 도착 자리" 로 적습니다.</p>
               <ul className="learn-list">
                 {EXAMPLES.map(([move, what]) => (
                   <li key={move}>
                     <b className="learn-notation">{notationOf(move)}</b>: {what}
                   </li>
                 ))}
-                <li>한수쉼은 "한수쉼" 으로 적는다.</li>
+                <li>한수쉼은 "한수쉼" 으로 적습니다.</li>
               </ul>
             </section>
           </section>
