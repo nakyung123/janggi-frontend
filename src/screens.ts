@@ -11,6 +11,7 @@
 // 뜨지 않는다.
 
 import type { ComponentType } from "react";
+import { PiecesScreen } from "./components/learn/PiecesScreen";
 
 /** 메뉴의 묶음. 이 순서로 선다. */
 export const GROUPS = [
@@ -32,6 +33,7 @@ export type Screen =
 
 const list = [
   { id: "play", group: "play", label: "대국" },
+  { id: "pieces", group: "learn", label: "기물", Component: PiecesScreen },
   { id: "games", group: "record", label: "기보" },
 ] as const satisfies readonly Screen[];
 
