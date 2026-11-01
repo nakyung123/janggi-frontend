@@ -21,7 +21,7 @@ const NNUE_GZ = NNUE_NAME + ".gz.bin";
 const require = createRequire(import.meta.url);
 
 // 장기 초기 국면. wasm 바이너리에 내장된 값과 동일하다.
-// r=차 n=마 b=상 a=사 k=궁 c=포 p=졸/병, 대문자=한(漢), 소문자=초(楚)
+// r=차 n=마 b=상 a=사 k=궁 c=포 p=졸/병, 대문자=초(楚), 소문자=한(漢)
 const START_FEN =
   "rnba1abnr/4k4/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/4K4/RNBA1ABNR w - - 0 1";
 
