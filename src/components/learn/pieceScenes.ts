@@ -127,7 +127,7 @@ export const PIECE_LESSONS: PieceLesson[] = [
     label: "마",
     name: "마",
     moves: "한 칸 곧게 간 뒤 한 칸 대각선으로 간다. 첫 칸이 막히면 못 간다.",
-    notes: ["마와 상은 궁성 대각선을 쓰지 않는다.", 멱],
+    notes: ["마와 상은 궁성 대각선을 첫 걸음으로 쓰지 않는다.", 멱],
     scenes: [
       {
         label: "빈 판",
@@ -148,7 +148,7 @@ export const PIECE_LESSONS: PieceLesson[] = [
     label: "상",
     name: "상",
     moves: "한 칸 곧게 간 뒤 두 칸 대각선으로 간다. 지나는 칸이 하나라도 막히면 못 간다.",
-    notes: ["마와 상은 궁성 대각선을 쓰지 않는다.", 멱],
+    notes: ["마와 상은 궁성 대각선을 첫 걸음으로 쓰지 않는다.", 멱],
     scenes: [
       {
         label: "빈 판",
