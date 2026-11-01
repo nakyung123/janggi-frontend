@@ -115,6 +115,26 @@
   margin-top: 12px;
 }
 
+/*
+ * 용어 목록. 말은 폼의 라벨 칸과 같은 폭(96)에 두고 뜻은 그 옆에 선다 - 말의 왼쪽 끝과 뜻의
+ * 왼쪽 끝이 각각 한 줄로 서서 훑어 읽기 쉽다. 가장 긴 말("외통(외통수)")도 96 에 든다.
+ */
+.learn-terms {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.learn-terms > div {
+  display: grid;
+  grid-template-columns: var(--label-w) minmax(0, 1fr);
+  column-gap: 12px;
+}
+
+.learn-terms dt {
+  font-weight: 600;
+}
+
 /* 화면의 이름. 화면 안에서 가장 큰 글자다(24/700, DESIGN.md 의 display). */
 .learn-title {
   font-size: var(--fs-xl);

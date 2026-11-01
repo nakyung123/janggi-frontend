@@ -13,6 +13,7 @@
 import type { ComponentType } from "react";
 import { PiecesScreen } from "./components/learn/PiecesScreen";
 import { RulesScreen } from "./components/learn/RulesScreen";
+import { TermsScreen } from "./components/learn/TermsScreen";
 
 /** 메뉴의 묶음. 이 순서로 선다. */
 export const GROUPS = [
@@ -36,6 +37,7 @@ const list = [
   { id: "play", group: "play", label: "대국" },
   { id: "pieces", group: "learn", label: "기물", Component: PiecesScreen },
   { id: "rules", group: "learn", label: "규칙", Component: RulesScreen },
+  { id: "terms", group: "learn", label: "용어", Component: TermsScreen },
   { id: "games", group: "record", label: "기보" },
 ] as const satisfies readonly Screen[];
 

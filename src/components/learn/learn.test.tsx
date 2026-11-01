@@ -47,7 +47,7 @@ function 배우기항목(menu: HTMLElement) {
     .map((b) => b.textContent);
 }
 
-const 배우기화면 = ["기물", "규칙"];
+const 배우기화면 = ["기물", "규칙", "용어"];
 
 describe("메뉴", () => {
   it("왼쪽 메뉴와 폰 메뉴 둘 다 배우기 묶음 아래에 배우기 화면이 이 순서로 선다", async () => {
