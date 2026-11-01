@@ -1,0 +1,224 @@
+/* 배우기 화면 - 기물·규칙·용어·좌표(components/learn/). 메뉴 목록의 화면이라 헤더 아래
+   남은 자리(layout.css 의 .page)를 받고, 안의 짜임은 여기서 정한다. 색·글자·간격은 base.css
+   의 토큰만 쓴다. */
+
+/* --- 판이 있는 화면(기물·좌표) -------------------------------------------- */
+
+/*
+ * 넓은 화면은 대국처럼 판 | 오른쪽 칸 두 단이다. 오른쪽 칸 폭은 대국과 같은 --panel-w 이고,
+ * 판은 남은 높이에 맞춰 큰다. 판과 오른쪽 칸은 한 덩어리로 가운데에 모은다(DESIGN.md).
+ *
+ * 대국은 판을 그린 뒤 폭을 재서(hooks/useBoardFit.ts) 덩어리 폭을 정한다. 여기서는 재지
+ * 않는다. 바깥 칸(.learn-fit)을 크기 컨테이너로 두면 판 칸의 폭을 CSS 로 바로 셀 수 있다 -
+ * 남은 높이 × 판의 가로세로 비(556:618)와, 남은 폭 가운데 작은 쪽이다. 판이 폭에 걸리면
+ * 판이 칸보다 낮아지고 위에 붙는다.
+ *
+ * 폰(900 이하)은 제목·고르기 → 판 → 설명 순서로 쌓고 쪽이 구른다(.page 밖 body 가 구른다).
+ */
+/* 폰은 헤더 바로 아래(8)에 24 짜리 제목이 붙어 답답했다. 16 으로 띄운다. */
+@media (max-width: 900px) {
+  .learn-fit,
+  .learn-doc {
+    padding-top: 8px;
+  }
+}
+
+.learn-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-panel);
+}
+
+.learn-head {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 판은 칸 폭을 꽉 채우고 높이는 판 그림의 비를 따른다(board.css 의 넓은 화면 규칙을 덮는다). */
+.learn-stage > .board {
+  width: 100%;
+  height: auto;
+}
+
+@media (min-width: 901px) {
+  .learn-fit {
+    height: 100%;
+    container-type: size;
+  }
+
+  .learn-main {
+    height: 100%;
+    display: grid;
+    grid-template-columns:
+      min(100cqw - var(--gap-col) - var(--panel-w), 100cqh * 556 / 618)
+      var(--panel-w);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      "stage head"
+      "stage desc";
+    column-gap: var(--gap-col);
+    row-gap: 16px;
+    justify-content: center;
+  }
+
+  .learn-stage {
+    grid-area: stage;
+    align-self: start;
+  }
+
+  .learn-head {
+    grid-area: head;
+  }
+
+  /* 설명이 칸보다 길면 이 칸만 구른다. 판과 고르기 단추는 자리를 지킨다. */
+  .learn-desc {
+    grid-area: desc;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 4px;
+  }
+}
+
+/* --- 글 화면(규칙·용어) -------------------------------------------------- */
+
+/*
+ * 읽는 글이라 한 줄을 길게 두지 않는다. 폭 640(패널 안쪽 글 600 남짓, 한글 서른여덟 자쯤)
+ * 한 단을 가운데에 둔다. 넓은 화면은 이 칸(.page)이 구르고, 폰은 쪽이 구른다.
+ *
+ * 모양은 업데이트 내역 창을 따른다 - 카드 한 장 안에 묶음 제목(20/600)과 글, 묶음 사이 24.
+ */
+.learn-doc {
+  max-width: 640px;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 24px;
+}
+
+.learn-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.learn-section-title {
+  font-size: var(--fs-title);
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.learn-sections p + p,
+.learn-sections ul + p {
+  margin-top: 12px;
+}
+
+/*
+ * 용어 목록. 말은 폼의 라벨 칸과 같은 폭(96)에 두고 뜻은 그 옆에 선다 - 말의 왼쪽 끝과 뜻의
+ * 왼쪽 끝이 각각 한 줄로 서서 훑어 읽기 쉽다. 가장 긴 말("외통(외통수)")도 96 에 든다.
+ */
+.learn-terms {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.learn-terms > div {
+  display: grid;
+  grid-template-columns: var(--label-w) minmax(0, 1fr);
+  column-gap: 12px;
+}
+
+.learn-terms dt {
+  font-weight: 600;
+}
+
+/*
+ * 좌표 화면에서 누른 자리: 번호(24/700) + 가로줄·세로줄·기물. 누르기 전 안내 글과 높이가
+ * 같게 두어(번호 줄 높이 29) 누를 때 판이 밀리지 않는다 - 폰은 이 줄 바로 아래가 판이다.
+ */
+.learn-coord {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 12px;
+  min-height: 29px;
+}
+
+.learn-coord-num {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 기보 표기(73졸63)는 숫자 칸이라 자간을 0 으로 되돌린다(base.css 의 body 주석). */
+.learn-notation {
+  letter-spacing: 0;
+}
+
+/* 화면의 이름. 화면 안에서 가장 큰 글자다(24/700, DESIGN.md 의 display). */
+.learn-title {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* 기물 일곱 개가 320 폰의 한 줄에 서도록 칸 안쪽 여백을 줄인다(한 글자씩이라 4 면 된다). */
+.learn-pieces button {
+  padding: 0 4px;
+}
+
+/* 설명 카드: 기물 그림(초·한) + 이름, 그 아래 한쪽 수와 점수. */
+.learn-piece-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.learn-piece-icon {
+  width: 40px;
+  height: 40px;
+  flex: none;
+}
+
+.learn-piece-name {
+  font-size: var(--fs-title);
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.learn-facts {
+  margin: 8px 0 12px;
+}
+
+/*
+ * 점 목록. 업데이트 내역 창의 목록(dialogs.css 의 .updates-items)과 같은 모양이다. 점은 글자
+ * 왼쪽 바깥에 둔다 - 두 줄로 넘어가도 글의 왼쪽 끝이 한 줄로 선다.
+ */
+.learn-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.learn-list li {
+  position: relative;
+  padding-left: 16px;
+}
+
+.learn-list li::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 10px;
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--disabled);
+}
