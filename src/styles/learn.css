@@ -17,7 +17,8 @@
  */
 /* 폰은 헤더 바로 아래(8)에 24 짜리 제목이 붙어 답답했다. 16 으로 띄운다. */
 @media (max-width: 900px) {
-  .learn-fit {
+  .learn-fit,
+  .learn-doc {
     padding-top: 8px;
   }
 }
@@ -78,6 +79,40 @@
     overscroll-behavior: contain;
     padding-right: 4px;
   }
+}
+
+/* --- 글 화면(규칙·용어) -------------------------------------------------- */
+
+/*
+ * 읽는 글이라 한 줄을 길게 두지 않는다. 폭 640(패널 안쪽 글 600 남짓, 한글 서른여덟 자쯤)
+ * 한 단을 가운데에 둔다. 넓은 화면은 이 칸(.page)이 구르고, 폰은 쪽이 구른다.
+ *
+ * 모양은 업데이트 내역 창을 따른다 - 카드 한 장 안에 묶음 제목(20/600)과 글, 묶음 사이 24.
+ */
+.learn-doc {
+  max-width: 640px;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 24px;
+}
+
+.learn-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.learn-section-title {
+  font-size: var(--fs-title);
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.learn-sections p + p,
+.learn-sections ul + p {
+  margin-top: 12px;
 }
 
 /* 화면의 이름. 화면 안에서 가장 큰 글자다(24/700, DESIGN.md 의 display). */

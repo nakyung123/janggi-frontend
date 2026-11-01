@@ -39,19 +39,37 @@ function 폰메뉴() {
   return screen.getByRole("dialog", { name: "메뉴" });
 }
 
+/** 메뉴에서 "배우기" 묶음 이름 아래에 선 항목들. */
+function 배우기항목(menu: HTMLElement) {
+  const heading = within(within(menu).getByRole("navigation", { name: "모드" })).getByText("배우기");
+  return within(heading.parentElement as HTMLElement)
+    .getAllByRole("button")
+    .map((b) => b.textContent);
+}
+
+const 배우기화면 = ["기물", "규칙"];
+
 describe("메뉴", () => {
-  it("왼쪽 메뉴와 폰 메뉴 둘 다 기물이 있고, 누르면 기물 화면이 선다", async () => {
+  it("왼쪽 메뉴와 폰 메뉴 둘 다 배우기 묶음 아래에 배우기 화면이 이 순서로 선다", async () => {
+    render(<App />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "새 대국" })).toBeTruthy());
+    expect(배우기항목(왼쪽메뉴())).toEqual(배우기화면);
+    expect(배우기항목(폰메뉴())).toEqual(배우기화면);
+  });
+
+  it.each(배우기화면)("%s - 두 메뉴 어디서 눌러도 그 화면이 서고, 대국을 누르면 판으로 돌아간다", async (name) => {
     render(<App />);
     await waitFor(() => expect(screen.getByRole("button", { name: "새 대국" })).toBeTruthy());
 
-    fireEvent.click(within(왼쪽메뉴()).getByRole("button", { name: "기물" }));
-    expect(screen.getByRole("heading", { level: 2, name: "기물" })).toBeTruthy();
+    fireEvent.click(within(왼쪽메뉴()).getByRole("button", { name }));
+    expect(screen.getByRole("heading", { level: 2, name })).toBeTruthy();
 
     fireEvent.click(within(왼쪽메뉴()).getByRole("button", { name: "대국" }));
-    expect(screen.queryByRole("heading", { level: 2, name: "기물" })).toBeNull();
+    expect(screen.queryByRole("heading", { level: 2, name })).toBeNull();
+    expect(screen.getByRole("button", { name: "새 대국" })).toBeTruthy();
 
-    fireEvent.click(within(폰메뉴()).getByRole("button", { name: "기물" }));
-    expect(screen.getByRole("heading", { level: 2, name: "기물" })).toBeTruthy();
+    fireEvent.click(within(폰메뉴()).getByRole("button", { name }));
+    expect(screen.getByRole("heading", { level: 2, name })).toBeTruthy();
   });
 });
 
