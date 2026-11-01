@@ -138,6 +138,19 @@ export class AppPage {
     return this.page.getByRole("banner").getByRole("button", { name: "로그아웃" });
   }
 
+  /**
+   * ☰ 메뉴에서 메뉴 목록(src/screens.ts)의 화면을 연다. 엔진을 기다리지 않는다 - 헤더와
+   * 메뉴는 엔진이 뜨기 전에도 서고, 목록의 화면은 엔진 없이 열린다.
+   */
+  async openScreen(name: string) {
+    await this.page.getByRole("button", { name: "메뉴 열기" }).click();
+    await this.page
+      .getByRole("dialog", { name: "메뉴" })
+      .getByRole("navigation", { name: "모드" })
+      .getByRole("button", { name, exact: true })
+      .click();
+  }
+
   /** ☰ 메뉴에서 기보 탭으로 간다. 폰에서는 화면 목록이 ☰ 메뉴 안에 있다. */
   async openGamesTab() {
     await this.page.getByRole("button", { name: "메뉴 열기" }).click();
