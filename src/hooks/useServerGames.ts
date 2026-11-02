@@ -262,7 +262,12 @@ export function useServerGames(games: ArchivedGame[]): ServerGames {
     };
   }, [loggedIn, setUploaded, 목록차례]);
 
+  /*
+   * 다시 받을 때 앞서 어긋난 까닭(error)도 지운다. 목록을 못 받은 말이 거기에도 들어가 있어서,
+   * 지우지 않으면 다시 받기가 된 뒤에도 그 말이 남는다. 다시 어긋나면 그때 또 적힌다.
+   */
   const reloadList = useCallback(() => {
+    setError(null);
     set목록실패(null);
     set목록차례((n) => n + 1);
   }, []);

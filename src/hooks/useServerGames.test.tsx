@@ -396,6 +396,20 @@ describe("전적 계산에 넘기는 값", () => {
     expect(result.current.listError).toBeNull();
   });
 
+  it("다시 받기가 되면 앞서 못 받았던 말이 어디에도 남지 않는다", async () => {
+    목록받기.mockRejectedValueOnce(new Error("서버가 받지 않았습니다. (502)"));
+    목록받기.mockResolvedValueOnce([]);
+
+    const { result } = renderHook(() => useServerGames([]));
+    await waitFor(() => expect(result.current.error).toContain("502"));
+
+    act(() => result.current.reloadList());
+
+    await waitFor(() => expect(result.current.summaries).toEqual([]));
+    expect(result.current.error).toBeNull();
+    expect(result.current.listError).toBeNull();
+  });
+
   it("앞 계정이 올린 기록이 남은 브라우저에서 다른 계정으로 들어오면, 그 판은 계산에 섞이지 않는다", async () => {
     // 앞 계정이 이 브라우저에서 올린 판. 로그아웃하지 않은 채 로그인이 풀려 기록이 남았다.
     writeStored("uploaded", { "앞계정판": "1:0" });
