@@ -176,7 +176,7 @@ export function PlayPanel(props: Props) {
         열여섯 자 남짓).
       */}
       <p className="muted small field-note">
-        {sideLocked ? "새 대국을 누르면 잠긴 칸이 풀립니다." : "시계 말고는 첫 수에 잠깁니다."}
+        {sideLocked ? "잠긴 칸은 새 대국에서 풀립니다." : "시계 말고는 첫 수에 잠깁니다."}
       </p>
 
       {/*
