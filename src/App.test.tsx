@@ -559,6 +559,63 @@ describe("판이 끝나면", () => {
   });
 });
 
+/*
+ * 전적은 판이 끝난 순간의 급수·쪽으로 센다(hooks/stats.ts). 두는 중에 바꿀 수 있으면 다른
+ * 급수와 둔 판이 그 급수의 전적에 든다. 그래서 내가 첫 수를 두면 쪽·급수를 잠근다.
+ * '판의 첫 수' 가 아니다 - 한을 잡으면 엔진이 판이 놓이자마자 두므로, 그것으로 잠그면
+ * 한을 잡은 사람은 바꿀 틈이 없다.
+ */
+describe("쪽·급수는 내가 첫 수를 두면 잠긴다", () => {
+  const 패널 = () => document.querySelector(".panel.play") as HTMLElement;
+  const 쪽 = (name: "초" | "한") => within(패널()).getByRole("button", { name }) as HTMLButtonElement;
+  const 급수 = () => within(패널()).getByRole("combobox", { name: /상대 급수/ }) as HTMLButtonElement;
+  const 시계 = () => within(패널()).getByRole("button", { name: "시계 없음" }) as HTMLButtonElement;
+  const 확인창 = () => screen.getByRole("alertdialog");
+
+  it("첫 수를 두면 쪽·급수가 잠기고 시계는 열려 있다. 끝난 판에서 새 대국을 누르면 풀린다", async () => {
+    await start();
+    expect(쪽("한").disabled).toBe(false);
+    expect(급수().disabled).toBe(false);
+
+    drag("c4", "c5");
+    await engineReply(1);
+    expect(쪽("초").disabled).toBe(true);
+    expect(쪽("한").disabled).toBe(true);
+    expect(급수().disabled).toBe(true);
+    expect(시계().disabled).toBe(false);
+
+    // 기권으로 끝낸다. 끝난 판도 잠겨 있다.
+    fireEvent.click(within(패널()).getByRole("button", { name: "기권" }));
+    fireEvent.click(within(확인창()).getByRole("button", { name: "기권" }));
+    fireEvent.click(await screen.findByRole("button", { name: "닫기" }));
+    expect(쪽("한").disabled).toBe(true);
+    expect(급수().disabled).toBe(true);
+
+    fireEvent.click(within(패널()).getByRole("button", { name: "새 대국" }));
+    fireEvent.click(within(확인창()).getByRole("button", { name: "새 대국" }));
+    await waitFor(() => expect(쪽("한").disabled).toBe(false));
+    expect(급수().disabled).toBe(false);
+  });
+
+  it("한을 잡아 엔진이 먼저 둬도 내가 두기 전에는 열려 있고, 초로 바꾸면 판을 처음부터 놓는다", async () => {
+    await start();
+    fireEvent.click(쪽("한"));
+    const enginesFirst = await engineReply(1);
+    const { from, to } = splitMove(enginesFirst);
+
+    expect(쪽("초").disabled).toBe(false);
+    expect(급수().disabled).toBe(false);
+
+    fireEvent.click(쪽("초"));
+    // 엔진이 둔 초의 첫 수가 내 수가 되지 않는다. 처음 국면이고 아무것도 잠기지 않았다.
+    await waitFor(() => expect(piece(from)).not.toBeNull());
+    expect(piece(to)).toBeNull();
+    expect(쪽("한").disabled).toBe(false);
+    expect(급수().disabled).toBe(false);
+    await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
+  });
+});
+
 describe("기보 파일 불러오기", () => {
   const recordFile = (name: string) =>
     new File(

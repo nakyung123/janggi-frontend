@@ -241,6 +241,15 @@ export default function App() {
   const position = useMemo(() => parseFen(entry.fen), [entry.fen]);
   /** 대국 탭의 판에 한 수라도 뒀는지. 시계·규칙 잠금·새 대국 확인이 본다. */
   const started = playHistory.length > 1;
+  /**
+   * 내가 이 판에 한 수라도 뒀는지. 쪽·급수 잠금이 본다. 판이 끝난 순간의 급수·쪽으로
+   * 전적을 세므로(hooks/stats.ts), 두는 중에 바꾸지 못하게 한다.
+   *
+   * `started` 로 잠그지 않는다. 한을 잡으면 엔진이 판이 놓이자마자 첫 수를 두어서, 그것으로
+   * 잠그면 한을 잡은 사람은 쪽·급수를 바꿀 틈이 없다. 무르기로 되감은 수도 기보에 남아
+   * 있으면 센다 - 되감아서 잠금을 푸는 길을 두지 않는다.
+   */
+  const moved = playHistory.some((h, i) => i > 0 && h.mover === mySide);
 
   /*
    * 첫 수를 둔 것을 한 판에 한 번만 알린다.
@@ -1145,6 +1154,7 @@ export default function App() {
                 mySide={mySide}
                 levelId={levelId}
                 started={started}
+                moved={moved}
                 ended={ended}
                 clockId={clockId}
                 onClock={setClockId}
@@ -1153,6 +1163,10 @@ export default function App() {
                 thinking={thinking}
                 hintNote={hintNote}
                 onMySide={(s) => {
+                  // 쪽은 내가 첫 수를 두기 전에만 바뀐다(moved). 그때 판에 수가 있으면 한을
+                  // 잡아 엔진이 먼저 둔 수뿐이다. 그대로 두면 엔진이 둔 초의 첫 수가 내 수가
+                  // 되어 바꾸자마자 잠기므로, 처음 국면(상차림은 그대로)으로 다시 놓는다.
+                  if (s !== mySide && started) startFrom(parseFen(playHistory[0].fen));
                   setMySide(s);
                   // 고른 쪽을 아래에 놓는다. 앉은 자리에서 보는 것이 기본이고,
                   // 뒤집어 보고 싶으면 판 뒤집기로 언제든 바꾼다.
