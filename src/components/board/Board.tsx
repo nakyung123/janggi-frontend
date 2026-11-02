@@ -34,7 +34,10 @@ export interface BoardProps {
   /** 지금 고른 기물이 갈 수 있는 곳 */
   targets: Square[];
   lastMove: { from: Square; to: Square } | null;
-  /** 복기한 판에서 고른 수 대신 뒀어야 할 수. 파란 화살표. */
+  /**
+   * AI 가 고른 수. 파란 화살표. 복기한 판에서는 고른 수 대신 뒀어야 할 수, 대국 중에는 힌트다.
+   * 둘 다 "AI 라면 이렇게 둔다" 라서 같은 모양으로 그린다.
+   */
   bestMove: { from: Square; to: Square } | null;
   /** 장군을 맞은 궁의 자리 */
   checkedKing?: Square | null;

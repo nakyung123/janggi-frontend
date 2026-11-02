@@ -2,7 +2,7 @@
 //
 //   윗줄: 처음 · 무르기(이전) · 다시(다음) · 끝   — 기보를 오간다
 //   가운데: 수 슬라이더 (기보 탭에만)             — 멀리 있는 수로 건너뛴다
-//   아랫줄: 판 뒤집기 · 한수쉼                     — 판에 손댄다
+//   아랫줄: 판 뒤집기 · 한수쉼 · 힌트              — 판에 손댄다
 //
 // 판 아래가 아니라 오른쪽 칸에 둔다. 이 앱은 페이지가 스크롤되지 않아 남는 세로가 곧
 // 판 크기라, 판 아래 한 줄(44px)은 그대로 판에서 빠진다. 가로는 판 옆이 남는다.
@@ -29,6 +29,12 @@ interface Props {
   /** 한수쉼을 둘 수 있는지. 내 차례이고, 엔진이 한수쉼을 합법수로 알려 줬을 때만이다. */
   canPass: boolean;
   /**
+   * 힌트를 찾을 수 있는지. 내 차례이고 그 국면의 합법수를 받았고, 찾는 중이거나 이미 찾은
+   * 국면이 아닐 때만이다(눌러도 아무 일 없는 버튼을 두지 않는다).
+   */
+  canHint: boolean;
+  onHint: () => void;
+  /**
    * 대국 탭의 판이 끝났는지. 끝난 판은 무를 수 없어서 '무르기·다시' 가 기보
    * 탭처럼 한 칸씩 오가는 '이전·다음' 이 된다(판은 App 이 잠근다).
    */
@@ -41,7 +47,7 @@ interface Props {
 }
 
 export function BoardControls(props: Props) {
-  const { mode, cursor, last, canPass, finished, onJump, onUndo, onFlip, onPass } = props;
+  const { mode, cursor, last, canPass, canHint, finished, onJump, onUndo, onFlip, onPass, onHint } = props;
 
   const atStart = cursor === 0;
   const atEnd = cursor >= last;
@@ -130,11 +136,19 @@ export function BoardControls(props: Props) {
         <button type="button" onClick={onFlip}>
           판 뒤집기
         </button>
-        {/* 기보 탭은 지난 판을 읽기만 한다. 둘 수가 없으니 한수쉼도 없다. */}
+        {/*
+          기보 탭은 지난 판을 읽기만 한다. 둘 수가 없으니 한수쉼도 힌트도 없다. 힌트는 판에
+          손대는 줄에 둔다 - 폰에서 판 바로 아래라 엄지가 닿고, 대국 칸의 새 대국·기권과 멀다.
+        */}
         {mode === "play" && (
-          <button type="button" disabled={!canPass} onClick={onPass}>
-            한수쉼
-          </button>
+          <>
+            <button type="button" disabled={!canPass} onClick={onPass}>
+              한수쉼
+            </button>
+            <button type="button" disabled={!canHint} onClick={onHint}>
+              힌트
+            </button>
+          </>
         )}
       </div>
     </div>

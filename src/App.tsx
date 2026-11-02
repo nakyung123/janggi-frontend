@@ -40,6 +40,7 @@ import {
   DEFAULT_LEVEL_ID,
   DEFAULT_REVIEW_DEPTH_ID,
   ENGINE_MOVE_CAP_MS,
+  HINT_LIMITS,
   LEVELS,
   MIN_THINK_MS,
   REVIEW_DEPTHS,
@@ -50,7 +51,7 @@ import {
 } from "./engine/levels";
 import type { EngineOptions, PositionRef, SearchLimits, Variant } from "./engine/types";
 import { forgetIfMoved, isEnginePrefs, isVariant, positionKey } from "./engine/types";
-import { useAnalysis, useEngine } from "./engine/useEngine";
+import { useAnalysis, useEngine, useHint } from "./engine/useEngine";
 import { useBoardFit } from "./hooks/useBoardFit";
 import { useClockTicking, useGameClock } from "./hooks/useGameClock";
 import { useKeyboard } from "./hooks/useKeyboard";
@@ -69,7 +70,7 @@ import { START_FEN, parseFen, toFen, undoTarget } from "./janggi/board";
 import { CLOCK_PRESETS, DEFAULT_CLOCK_ID, clockPresetById, moveBudgetMs } from "./janggi/clock";
 import type { HistoryEntry } from "./janggi/history";
 import { hangulHistory, movesOf, nextEntry, startHistory } from "./janggi/history";
-import { arrowOf, splitMove } from "./janggi/notation";
+import { arrowOf, describeMove, splitMove } from "./janggi/notation";
 import type { PieceChar, PieceType, Side } from "./janggi/pieces";
 import { sideOf } from "./janggi/pieces";
 import { bestArrowOf } from "./janggi/review";
@@ -331,6 +332,13 @@ export default function App() {
     searchLimits,
     optionsKey
   );
+
+  /*
+   * 힌트 - 내 차례에 누르면 이 국면에서 둘 수를 한 번 찾는다. 판에는 복기의 'AI의 수' 와
+   * 같은 파란 화살표로, 대국 칸 제목 줄에는 기보 표기로 보인다. 쓴 것은 어디에도 적지 않고,
+   * 힌트를 쓴 판도 평소대로 센다(무른 판과 같은 기준, 2026-11-02 사용자 결정).
+   */
+  const hint = useHint(engine, positionRef, HINT_LIMITS);
 
   // --- 판정 ------------------------------------------------------------
 
@@ -619,6 +627,15 @@ export default function App() {
    */
   const canTouchBoard = mode === "play" && !ended && !engineTurn;
 
+  /**
+   * 힌트를 찾을 수 있는지. 둘 수 있는 국면이어야 하고, 찾는 중이거나 이미 찾았으면 잠근다.
+   *
+   * 그 국면의 합법수를 받기 전에도 잠근다. 엔진은 일을 줄 세워 하는데, 엔진이 둔 직후에는
+   * 설정을 내 차례 것(실력 20)으로 바꾸는 일이 합법수 묻기보다 먼저 줄에 선다. 합법수가 왔으면
+   * 설정도 바뀌어 있다 - 그 전에 누르면 힌트가 상대 급수의 세기로 찾아질 수 있다.
+   */
+  const canHint = canTouchBoard && probed && !hint.searching && hint.move === null;
+
   /** 집고·끌고·한수쉼. 엔진이 알려 준 합법수를 '이 기물은 어디로 가나' 로 바꾼다. */
   const touch = useBoardTouch({
     legal,
@@ -803,8 +820,20 @@ export default function App() {
     () => reviewed?.find((r) => r.index === cursor) ?? null,
     [reviewed, cursor]
   );
-  /** 복기한 판에서, 고른 수 대신 뒀어야 할 수 */
-  const bestArrow = openGame ? bestArrowOf(currentReview) : null;
+  /**
+   * 판의 파란 화살표 - AI 가 고른 수. 복기한 판에서는 고른 수 대신 뒀어야 할 수, 대국 중에는
+   * 힌트. 둘이 한 판에 같이 서는 일은 없다(힌트는 기보 탭에서 지난 판을 볼 때 없다).
+   */
+  const bestArrow = openGame ? bestArrowOf(currentReview) : arrowOf(hint.move);
+
+  /** 대국 칸 제목 줄의 힌트 한 줄. 한수쉼은 화살표로 그릴 수 없어 이 줄만 말한다. */
+  const hintNote = hint.searching
+    ? "힌트를 찾는 중…"
+    : hint.move
+      ? `AI의 수 ${describeMove(hint.move, position.board).short}`
+      : hint.failed
+        ? "힌트를 찾지 못했습니다."
+        : null;
   const lastMove = useMemo(() => arrowOf(entry.move), [entry.move]);
 
   /** 장군을 맞은 궁의 자리. 판에서 붉게 테를 두른다. */
@@ -988,11 +1017,13 @@ export default function App() {
               cursor={cursor}
               last={history.length - 1}
               canPass={canTouchBoard && touch.passSquare !== null}
+              canHint={canHint}
               finished={mode === "play" && ended}
               onJump={goTo}
               onUndo={undoMove}
               onFlip={flip}
               onPass={touch.pass}
+              onHint={hint.ask}
             />
 
             {mode === "play" && (
@@ -1006,6 +1037,7 @@ export default function App() {
                 variant={prefs.variant}
                 onVariant={(v) => setPrefs((o) => ({ ...o, variant: v }))}
                 thinking={thinking}
+                hintNote={hintNote}
                 onMySide={(s) => {
                   setMySide(s);
                   // 고른 쪽을 아래에 놓는다. 앉은 자리에서 보는 것이 기본이고,

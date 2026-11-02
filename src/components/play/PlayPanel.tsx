@@ -44,6 +44,8 @@ interface Props {
   onVariant: (v: Variant) => void;
   /** 엔진이 지금 생각하고 있는지 */
   thinking: boolean;
+  /** 힌트 한 줄("AI의 수 43병53" 등). 엔진이 생각하는 동안에는 그 말이 먼저 선다. */
+  hintNote: string | null;
   onMySide: (side: Side) => void;
   onLevel: (id: string) => void;
   /** 이 판을 시작한 상차림. 시작 국면이 넷 중 어느 것도 아니면 null. */
@@ -55,7 +57,7 @@ interface Props {
 
 export function PlayPanel(props: Props) {
   const {
-    mySide, levelId, started, ended, thinking,
+    mySide, levelId, started, ended, thinking, hintNote,
     clockId, onClock, variant, onVariant,
     onMySide, onLevel, setups, onSetup, onNewGame, onResign,
   } = props;
@@ -76,7 +78,15 @@ export function PlayPanel(props: Props) {
     <div className="panel play">
       <div className="panel-title">
         대국
-        {thinking && <span className="panel-meta">상대가 생각 중…</span>}
+        {/*
+          높이가 정해진 줄이라 말이 뜨고 져도 아래 칸이 움직이지 않는다. 힌트는 내 차례에만
+          찾으니 '상대가 생각 중' 과 겹치지 않는다.
+        */}
+        {thinking ? (
+          <span className="panel-meta">상대가 생각 중…</span>
+        ) : (
+          hintNote && <span className="panel-meta">{hintNote}</span>
+        )}
       </div>
 
       <div className="row">

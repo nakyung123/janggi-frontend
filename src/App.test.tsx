@@ -14,8 +14,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { positionKey } from "./engine/types";
-import { START_FEN } from "./janggi/board";
-import { splitMove } from "./janggi/notation";
+import { START_FEN, parseFen } from "./janggi/board";
+import { describeMove, splitMove } from "./janggi/notation";
 import { FakeEngine } from "./test/fakeEngine";
 
 vi.mock("./engine/engine", async () => ({
@@ -134,6 +134,104 @@ describe("엔진과 한 판", () => {
     act(() => engine().releaseProbes());
     await waitFor(() => expect(passButton().disabled).toBe(false));
     expect(pickable().length).toBeGreaterThan(0);
+  });
+});
+
+describe("힌트", () => {
+  const hintButton = () => screen.getByRole("button", { name: "힌트" }) as HTMLButtonElement;
+  const arrow = () => document.querySelector("svg.board .best-arrow");
+  /** 대국 칸(연습 중이면 연습 칸) 제목 줄 오른쪽의 덧말 */
+  const panelMeta = () => document.querySelector(".panel-title .panel-meta")?.textContent ?? null;
+
+  it("내 차례에 누르면 엔진이 고른 수가 화살표와 덧말로 선다", async () => {
+    await start();
+    fireEvent.click(hintButton());
+
+    await waitFor(() => expect(arrow()).not.toBeNull());
+    const asked = engine().onceCalls;
+    expect(asked).toHaveLength(1);
+    const move = asked[0].answer!;
+    const { from, to } = splitMove(move);
+
+    // 화살표의 두 끝이 그 수의 출발·도착 교차점이다.
+    const line = arrow()!;
+    expect([line.getAttribute("x1"), line.getAttribute("y1")].map(Number)).toEqual(
+      Object.values(pointOf(from))
+    );
+    expect([line.getAttribute("x2"), line.getAttribute("y2")].map(Number)).toEqual(
+      Object.values(pointOf(to))
+    );
+    expect(panelMeta()).toBe(`AI의 수 ${describeMove(move, parseFen(START_FEN).board).short}`);
+
+    // 급수와 상관없이 가장 센 설정으로, 정한 탐색량으로 찾는다.
+    expect(asked[0].skill).toBe(20);
+    expect(asked[0].limits).toEqual({ nodes: 300_000, movetimeMs: 3_000 });
+
+    // 같은 국면에서 다시 누르면 다시 찾지 않는다.
+    expect(hintButton().disabled).toBe(true);
+  });
+
+  it("엔진 차례에는 눌리지 않고, 내 차례가 되면 눌린다", async () => {
+    engine().searchMs = 400;
+    await start();
+    drag("c4", "c5");
+    await waitFor(() => expect(hintButton().disabled).toBe(true));
+    await engineReply(1);
+    await waitFor(() => expect(hintButton().disabled).toBe(false));
+  });
+
+  it("수를 두면 화살표와 덧말이 사라진다", async () => {
+    await start();
+    fireEvent.click(hintButton());
+    await waitFor(() => expect(arrow()).not.toBeNull());
+
+    drag("c4", "c5");
+    await waitFor(() => expect(arrow()).toBeNull());
+    expect(panelMeta() ?? "").not.toMatch(/^AI의 수/);
+    await engineReply(1);
+    expect(arrow()).toBeNull();
+  });
+
+  it("찾는 동안 수를 두면 늦게 온 힌트는 버린다", async () => {
+    // 늦게 온 답을 새 국면의 것으로 읽으면 엉뚱한 자리에 화살표가 선다.
+    engine().holdOnce = true;
+    await start();
+    fireEvent.click(hintButton());
+    await waitFor(() => expect(panelMeta()).toBe("힌트를 찾는 중…"));
+
+    drag("c4", "c5");
+    await engineReply(1);
+    act(() => engine().releaseOnce());
+    await waitFor(() => expect(hintButton().disabled).toBe(false));
+    expect(arrow()).toBeNull();
+  });
+
+  it("끝난 판에서는 눌리지 않는다", async () => {
+    await start();
+    engine().probeAnswer = (ref) =>
+      ref.moves.length === 2 ? { checkers: ["e3"], legal: ["e2e2"] } : null;
+    drag("c4", "c5");
+    await engineReply(1);
+    await waitFor(() => expect(document.querySelector(".dialog.result")).not.toBeNull());
+    expect(hintButton().disabled).toBe(true);
+  });
+
+  it("힌트를 쓴 판도 끝나면 기보 목록에 평소대로 들어간다", async () => {
+    // 힌트를 쓴 판도 전적에 그대로 센다(2026-11-02 사용자 결정). 쓴 것을 어디에도 적지 않는다.
+    await start();
+    fireEvent.click(hintButton());
+    await waitFor(() => expect(arrow()).not.toBeNull());
+    // 기권은 한 수라도 둔 뒤에 열린다.
+    drag("c4", "c5");
+    await engineReply(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "기권" }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "기권" }));
+    await waitFor(() => expect(document.querySelector(".dialog.result")).not.toBeNull());
+
+    const saved = JSON.parse(localStorage.getItem("janggi:games") ?? "[]") as { result: { kind: string } }[];
+    expect(saved).toHaveLength(1);
+    expect(saved[0].result.kind).toBe("resign");
   });
 });
 
