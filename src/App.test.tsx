@@ -14,7 +14,12 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { positionKey } from "./engine/types";
+import { writeStored } from "./hooks/usePersisted";
+import type { ArchivedGame } from "./janggi/archive";
+import { RESIGN_ON_ABANDON_PLIES } from "./janggi/archive";
+import type { Square } from "./janggi/board";
 import { START_FEN, parseFen } from "./janggi/board";
+import type { HistoryEntry } from "./janggi/history";
 import { nextEntry, startHistory } from "./janggi/history";
 import { describeMove, splitMove } from "./janggi/notation";
 import { sideOf } from "./janggi/pieces";
@@ -613,6 +618,72 @@ describe("쪽·급수는 내가 첫 수를 두면 잠긴다", () => {
     expect(쪽("한").disabled).toBe(false);
     expect(급수().disabled).toBe(false);
     await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
+  });
+});
+
+/*
+ * 지는 판을 새 대국으로 버리면 전적에서 빠져 점수가 높게 나온다. 그래서 기준 수 이상 둔
+ * 판은 기권패로 남긴다. 기준보다 짧은 판은 지금처럼 남기지 않는다 - 급수·쪽을 잘못 골라
+ * 다시 시작하는 때다. 경계 양쪽(10수·9수)을 본다.
+ */
+describe("오래 둔 판을 새 대국으로 버리면 기권패로 남는다", () => {
+  const 패널 = () => document.querySelector(".panel.play") as HTMLElement;
+  const 기보 = () => JSON.parse(localStorage.getItem("janggi:games") ?? "[]") as ArchivedGame[];
+
+  /** 두던 판을 plies 수까지 둔 모양으로 넣는다. 양쪽 졸·병을 차례로 한 칸씩 앞으로. */
+  function 두던판(plies: number, id: string) {
+    const 수: [Square, Square][] = [
+      ["a4", "a5"], ["a7", "a6"], ["c4", "c5"], ["c7", "c6"], ["e4", "e5"],
+      ["e7", "e6"], ["g4", "g5"], ["g7", "g6"], ["i4", "i5"], ["i7", "i6"],
+    ];
+    let history: HistoryEntry[] = startHistory(START_FEN);
+    for (const [from, to] of 수.slice(0, plies)) {
+      history = [...history, nextEntry(history[history.length - 1].fen, from, to)];
+    }
+    writeStored("game", { id, history, cursor: plies, resigned: null, flagged: null });
+  }
+
+  function 새대국() {
+    fireEvent.click(within(패널()).getByRole("button", { name: "새 대국" }));
+    return screen.getByRole("alertdialog");
+  }
+
+  it("10수를 둔 판은 확인 창이 미리 말하고, 확인하면 기권패(엔진 쪽 승)로 남는다", async () => {
+    expect(RESIGN_ON_ABANDON_PLIES).toBe(10);
+    두던판(10, "길게-둔-판"); // 초 차례 = 내 차례
+    await start();
+
+    const 창 = 새대국();
+    expect(창.textContent).toContain("두던 판은 기권패로 기보 목록에 남습니다.");
+    const 확인 = within(창).getByRole("button", { name: "새 대국" });
+    // 되돌릴 수 없는 확인이라 기권 확인과 같은 붉은 단추다.
+    expect(확인.className).toContain("danger");
+    fireEvent.click(확인);
+
+    await waitFor(() => expect(기보()).toHaveLength(1));
+    const [판] = 기보();
+    expect(판.id).toBe("길게-둔-판");
+    expect(판.result).toEqual({ kind: "resign", winner: "han" });
+    expect(판.history).toHaveLength(11);
+    // 새 판이 놓이고, 결과 창은 뜨지 않고, 판이 끝났다는 측정도 가지 않는다.
+    await waitFor(() => expect(piece("a4")).not.toBeNull());
+    expect(document.querySelector(".dialog.result")).toBeNull();
+    expect(보낸횟수("game_end")).toBe(0);
+    expect(보낸횟수("game_start")).toBe(1);
+  });
+
+  it("9수를 둔 판은 지금처럼 남지 않는다", async () => {
+    writeStored("mySide", "han"); // 9수 뒤는 한 차례 = 내 차례. 엔진이 열째 수를 두지 않게
+    두던판(9, "짧게-둔-판");
+    await start();
+
+    const 창 = 새대국();
+    expect(창.textContent).toContain("두던 판은 사라집니다.");
+    fireEvent.click(within(창).getByRole("button", { name: "새 대국" }));
+
+    await waitFor(() => expect(piece("a7")).not.toBeNull());
+    await new Promise((r) => setTimeout(r, 100));
+    expect(기보()).toHaveLength(0);
   });
 });
 

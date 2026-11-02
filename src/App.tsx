@@ -66,7 +66,7 @@ import { usePractice } from "./hooks/usePractice";
 import { useServerGames } from "./hooks/useServerGames";
 import { useReview } from "./hooks/useReview";
 
-import { newGameId, upsertGame } from "./janggi/archive";
+import { RESIGN_ON_ABANDON_PLIES, newGameId, upsertGame } from "./janggi/archive";
 import type { ArchivedGame, ArchivedResult } from "./janggi/archive";
 import type { Position, Square } from "./janggi/board";
 import { START_FEN, parseFen, toFen, undoTarget } from "./janggi/board";
@@ -739,15 +739,31 @@ export default function App() {
   };
 
   /**
+   * 새 대국을 누르면 두던 판이 기권패로 남는지. 끝나지 않았고 기보가 기준 수 이상이면 남는다
+   * (archive.ts 의 RESIGN_ON_ABANDON_PLIES). 확인 창의 글과 새 대국이 같이 본다.
+   */
+  const abandonIsResign = !ended && playHistory.length - 1 >= RESIGN_ON_ABANDON_PLIES;
+
+  /**
    * 새 대국. 시작 국면(상차림 포함)은 그대로 두고 수만 지운다.
    *
-   * 두던 판은 남기지 않는다. 한동안 '중단' 으로 목록에 넣었는데(끝난 판은 끝날 때 이미
-   * 들어간다), 목록이 '기보' 인 이상 거기 선 것은 다 둔 판으로 읽힌다. 몇 수 두다 만
-   * 판이 섞여 서면 끝난 판을 골라내기가 오히려 어렵다. 없어지는 것은 새 대국을 묻는
-   * 창이 미리 말한다. 파일에서 불러온 끝나지 않은 기보는 그대로 '중단' 으로 든다 -
-   * 그건 사람이 일부러 가져온 것이다.
+   * 짧게 두다 만 판은 남기지 않는다. 한동안 '중단' 으로 목록에 넣었는데(끝난 판은 끝날 때
+   * 이미 들어간다), 목록이 '기보' 인 이상 거기 선 것은 다 둔 판으로 읽힌다. 몇 수 두다 만
+   * 판이 섞여 서면 끝난 판을 골라내기가 오히려 어렵다. 파일에서 불러온 끝나지 않은 기보는
+   * 그대로 '중단' 으로 든다 - 그건 사람이 일부러 가져온 것이다.
+   *
+   * **오래 둔 판은 기권패로 남긴다**(abandonIsResign). 지는 판을 버리면 전적에서 빠져 점수가
+   * 높게 나온다. 기권 단추와 같은 모양으로 넣고, 로그인했으면 다른 판처럼 서버에 올라간다.
+   * 결과 창은 띄우지 않고 game_end 도 보내지 않는다 - 사람은 방금 확인 창에서 골랐고,
+   * game_end 는 '판이 끝나 결과 창이 뜬 판' 만 세어 왔다. 여기서 보내면 쌓인 기록과 뜻이
+   * 달라진다. 어느 쪽이든 새 대국을 묻는 창이 미리 말한다.
    */
   const newGame = () => {
+    if (abandonIsResign) {
+      const winner: Side = mySide === "cho" ? "han" : "cho";
+      setGames((list) => upsertGame(list, archiveOf({ kind: "resign", winner })));
+    }
+
     /*
      * **세션의 첫 판은 여기를 지나지 않는다.** 앱이 뜨면 판이 이미 놓여 있어서 '시작'
      * 이라는 순간이 없다. 그래서 이것은 "판을 시작했다" 가 아니라 **"한 판 더 뒀다"** 다.
@@ -1268,9 +1284,13 @@ export default function App() {
               ? "판을 처음 모양으로 다시 놓습니다."
               : ended
                 ? "끝난 판은 기보 목록에서 다시 볼 수 있습니다."
-                : "두던 판은 사라집니다. 기보 목록에는 끝난 판만 남습니다."
+                : abandonIsResign
+                  ? "두던 판은 기권패로 기보 목록에 남습니다."
+                  : "두던 판은 사라집니다. 기보 목록에는 끝난 판만 남습니다."
           }
           confirmLabel="새 대국"
+          // 기권패로 남는 것만 되돌릴 수 없다. 기권 확인과 같은 붉은 단추다.
+          danger={abandonIsResign}
           onConfirm={() => {
             setAsking(null);
             newGame();
