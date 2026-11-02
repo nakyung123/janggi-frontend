@@ -1079,7 +1079,7 @@ export default function App() {
 
       {Page ? (
         <main className="page">
-          <Page />
+          <Page games={games} server={server} />
         </main>
       ) : booting ? (
         <main className="page">
