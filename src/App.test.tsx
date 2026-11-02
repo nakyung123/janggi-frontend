@@ -15,7 +15,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { positionKey } from "./engine/types";
 import { START_FEN, parseFen } from "./janggi/board";
+import { nextEntry, startHistory } from "./janggi/history";
 import { describeMove, splitMove } from "./janggi/notation";
+import { reviewMove } from "./janggi/review";
 import { FakeEngine } from "./test/fakeEngine";
 
 vi.mock("./engine/engine", async () => ({
@@ -232,6 +234,136 @@ describe("힌트", () => {
     const saved = JSON.parse(localStorage.getItem("janggi:games") ?? "[]") as { result: { kind: string } }[];
     expect(saved).toHaveLength(1);
     expect(saved[0].result.kind).toBe("resign");
+  });
+});
+
+describe("실수한 곳부터 다시", () => {
+  /*
+   * 복기를 마친 판 하나. 내가 초를 잡았고, 셋째 수(나의 e4e5)가 큰 실수다. 기보 목록은 등급을
+   * 승률 하락에서 다시 매기므로(archive.ts 의 regrade) 점수로 정한다.
+   */
+  const 수순 = ["c4c5", "c7c6", "e4e5", "e7e6"];
+  function 복기한판() {
+    const history = startHistory(START_FEN);
+    for (const m of 수순) {
+      const { from, to } = splitMove(m);
+      history.push(nextEntry(history[history.length - 1].fen, from, to));
+    }
+    const reviewed = 수순.map((m, i) =>
+      reviewMove({
+        index: i + 1,
+        mover: i % 2 === 0 ? "cho" : "han",
+        before: parseFen(history[i].fen).board,
+        after: parseFen(history[i + 1].fen).board,
+        played: m,
+        best: m === "e4e5" ? "a4a5" : m,
+        replyPv: [],
+        scoreBefore: 0,
+        scoreAfter: m === "e4e5" ? -8 : 0,
+        bestGivesCheck: false,
+      })
+    );
+    return {
+      id: "reviewed-1",
+      endedAt: Date.now() - 60_000,
+      mySide: "cho",
+      levelId: "k12",
+      levelName: "12급",
+      variant: "janggi",
+      result: { kind: "resign", winner: "han" },
+      history,
+      reviewed,
+    };
+  }
+
+  const 다시두기 = () => screen.queryByRole("button", { name: "이 수 전부터 다시 두기" });
+  const 이전 = () => fireEvent.click(screen.getByRole("button", { name: /이전|무르기/ }));
+  const 연습칸 = () => document.querySelector(".panel.practice");
+  const 저장된판들 = () => JSON.parse(localStorage.getItem("janggi:games") ?? "[]") as { id: string }[];
+
+  /** 대국 탭에서 한 수 두고(두던 판), 기보 탭에서 복기한 판을 연다. 판은 마지막 수(한의 수)에 선다. */
+  async function 복기한판을연다() {
+    localStorage.setItem("janggi:games", JSON.stringify([복기한판()]));
+    await start();
+    drag("c4", "c5");
+    await engineReply(1);
+    fireEvent.click(screen.getByRole("button", { name: /^기보/ }));
+    await waitFor(() => expect(document.querySelectorAll(".game-card")).toHaveLength(1));
+    fireEvent.click(document.querySelector(".game-card")!);
+    await screen.findByRole("button", { name: "다시 복기" });
+  }
+
+  it("내가 둔 큰 실수 자리에만 단추가 서고, 지난 판에는 힌트가 없다", async () => {
+    await 복기한판을연다();
+    expect(screen.queryByRole("button", { name: "힌트" })).toBeNull();
+    expect(다시두기(), "4수째 - 한의 수").toBeNull();
+    이전();
+    expect(다시두기(), "3수째 - 나의 큰 실수").not.toBeNull();
+    이전();
+    expect(다시두기(), "2수째 - 한의 수").toBeNull();
+    이전();
+    expect(다시두기(), "1수째 - 나의 최선수").toBeNull();
+  });
+
+  it("누르면 그 수를 두기 전 국면이 서고, 내가 두면 엔진이 이어 둔다. 두던 판은 그대로다", async () => {
+    await 복기한판을연다();
+    const 두던판 = localStorage.getItem("janggi:game");
+    이전();
+    fireEvent.click(다시두기()!);
+
+    // 큰 실수(e4e5)를 두기 전 국면 - 앞의 두 수는 둔 채로, e4 의 졸은 아직 제자리다.
+    await waitFor(() => expect(연습칸()).not.toBeNull());
+    expect(piece("c5")).not.toBeNull();
+    expect(piece("c6")).not.toBeNull();
+    expect(piece("e4")).not.toBeNull();
+    expect(piece("e5")).toBeNull();
+    expect(screen.queryByRole("button", { name: "다시 복기" })).toBeNull();
+    expect(연습칸()!.textContent).toContain("초의 2번째 수(75졸65) 전 국면부터 12급과 다시 둡니다.");
+
+    // 연습 시작 국면 앞으로는 되짚지 않는다.
+    expect((screen.getByRole("button", { name: "처음으로" }) as HTMLButtonElement).disabled).toBe(true);
+
+    await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
+    drag("a4", "a5");
+    await engineReply(2);
+    expect(piece("a5")).not.toBeNull();
+
+    // 무르면 연습 시작 국면까지만 간다.
+    fireEvent.click(screen.getByRole("button", { name: /무르기/ }));
+    await waitFor(() => expect(piece("a4")).not.toBeNull());
+    expect((screen.getByRole("button", { name: "처음으로" }) as HTMLButtonElement).disabled).toBe(true);
+
+    // 복기로 돌아가면 보던 수(큰 실수)에 선다.
+    fireEvent.click(screen.getByRole("button", { name: "복기로 돌아가기" }));
+    await waitFor(() => expect(다시두기()).not.toBeNull());
+    expect(piece("e5")).not.toBeNull();
+
+    // 대국 탭의 두던 판은 그대로다.
+    fireEvent.click(screen.getByRole("button", { name: "대국" }));
+    await waitFor(() => expect(piece("c5")).not.toBeNull());
+    expect(localStorage.getItem("janggi:game")).toBe(두던판);
+  });
+
+  it("연습 판은 끝나도 기보 목록에 들지 않고 결과 창도 뜨지 않는다", async () => {
+    await 복기한판을연다();
+    이전();
+    fireEvent.click(다시두기()!);
+    await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
+
+    // 내가 두고 엔진이 받은 국면(앞 두 수 + 둘)을 외통으로 꾸민다. 차례인 초(나)가 진다.
+    engine().probeAnswer = (ref) =>
+      ref.moves.length === 4 && ref.moves[2] === "a4a5" ? { checkers: ["e3"], legal: ["e2e2"] } : null;
+    drag("a4", "a5");
+    await engineReply(2);
+
+    await waitFor(() => expect(연습칸()!.textContent).toContain("외통 - 한이 이겼습니다."));
+    expect(document.querySelector(".dialog.result")).toBeNull();
+    expect(저장된판들().map((g) => g.id)).toEqual(["reviewed-1"]);
+
+    // 처음부터 다시 두면 연습 시작 국면으로 돌아간다.
+    fireEvent.click(screen.getByRole("button", { name: "처음부터 다시" }));
+    await waitFor(() => expect(piece("a4")).not.toBeNull());
+    expect(piece("a5")).toBeNull();
   });
 });
 

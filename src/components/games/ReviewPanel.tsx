@@ -2,7 +2,7 @@
 //
 //   복기 전     깊이를 고르고 시작한다
 //   도는 중     진행률과 중단 버튼
-//   복기 뒤     지금 수의 설명, 그 아래 깊이를 골라 다시 복기
+//   복기 뒤     지금 수의 설명(내 큰 실수면 그 수 전부터 다시 두기), 그 아래 깊이를 골라 다시 복기
 //
 // 판에 떠 있는 수 하나만 말한다. 수를 옮기는 것은 판 조작 줄의 이전·다음과 형세 그래프가
 // 한다. 설명은 줄마다 이름을 붙인다 - 승률이 어떻게 바뀌었나, AI라면 무엇을 뒀나, 그 뒤에
@@ -36,12 +36,15 @@ interface Props {
   error: string | null;
   onStart: () => void;
   onStop: () => void;
+  /** 지금 수(내 큰 실수)를 두기 전 국면부터 다시 둘 수 있는지 */
+  canPractice: boolean;
+  onPractice: () => void;
 }
 
 export function ReviewPanel(props: Props) {
   const {
     moveCount, depthId, threads, onDepth, running, progress, reviewed, mySide, cursor, error,
-    onStart, onStop,
+    onStart, onStop, canPractice, onPractice,
   } = props;
 
   const depth = reviewDepthById(depthId);
@@ -183,6 +186,17 @@ export function ReviewPanel(props: Props) {
         />
       ) : (
         <p className="muted">시작 국면</p>
+      )}
+      {/*
+        내 큰 실수에서만 선다. 그 수의 설명 바로 아래 - 읽고 나서 누르는 자리다. 테두리
+        버튼이다(채운 버튼은 이 칸에 '복기 시작' 하나뿐이고, 복기 뒤에는 없다).
+      */}
+      {canPractice && (
+        <div className="row review-practice">
+          <button type="button" onClick={onPractice}>
+            이 수 전부터 다시 두기
+          </button>
+        </div>
       )}
       <div className="review-again">
         {deepNote && <p className="muted review-deep-note">{deepNote}</p>}

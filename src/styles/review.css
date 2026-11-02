@@ -194,3 +194,22 @@
 .review-deep-note {
   margin-bottom: 12px;
 }
+
+/* --- 실수한 곳부터 다시 -------------------------------------------------- */
+
+/* 복기 설명 바로 아래의 [이 수 전부터 다시 두기]. 그 수의 설명과 한 묶음이라 제목→내용(16)만큼
+   띄우고, 아래 '다시 복기' 묶음과는 그 묶음의 위 여백(24)으로 갈린다. */
+.review-practice {
+  margin-top: 16px;
+}
+
+/* 연습 칸(PracticePanel). 한 줄 설명 → 끝난 까닭 → 버튼 줄. 버튼 줄은 묶음 사이(24)로 띄운다.
+   폰 320 에서는 두 버튼이 한 줄에 다 서지 않아 두 줄로 내려간다(.row 의 flex-wrap). */
+.practice-result {
+  margin-top: 12px;
+  font-weight: 600;
+}
+
+.practice-actions {
+  margin-top: 24px;
+}

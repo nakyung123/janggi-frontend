@@ -24,6 +24,11 @@ interface Props {
   mode: BoardMode;
   /** 지금 보고 있는 수의 번호 */
   cursor: number;
+  /**
+   * 되짚을 수 있는 가장 앞 칸 번호. 보통 0(시작 국면)이고, 연습 판은 연습을 시작한 국면이다
+   * - 그 앞은 원래 판의 수순이라 거기서 두면 내 실수를 다시 두는 것이 아니다.
+   */
+  first?: number;
   /** 기보의 마지막 칸 번호 */
   last: number;
   /** 한수쉼을 둘 수 있는지. 내 차례이고, 엔진이 한수쉼을 합법수로 알려 줬을 때만이다. */
@@ -47,9 +52,10 @@ interface Props {
 }
 
 export function BoardControls(props: Props) {
-  const { mode, cursor, last, canPass, canHint, finished, onJump, onUndo, onFlip, onPass, onHint } = props;
+  const { mode, cursor, first = 0, last, canPass, canHint, finished, onJump, onUndo, onFlip, onPass, onHint } =
+    props;
 
-  const atStart = cursor === 0;
+  const atStart = cursor <= first;
   const atEnd = cursor >= last;
   // 두는 중인 대국에서만 무르기·다시다. 끝난 판과 기보 탭은 한 칸씩 오간다.
   const undoing = mode === "play" && !finished;
@@ -83,7 +89,7 @@ export function BoardControls(props: Props) {
           type="button"
           className="icon"
           disabled={atStart}
-          onClick={() => onJump(0)}
+          onClick={() => onJump(first)}
           aria-label="처음으로"
         >
           <ChevronsLeft {...ICON} />
