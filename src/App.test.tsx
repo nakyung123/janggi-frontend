@@ -577,6 +577,8 @@ describe("쪽·급수는 내가 첫 수를 두면 잠긴다", () => {
   const 급수 = () => within(패널()).getByRole("combobox", { name: /상대 급수/ }) as HTMLButtonElement;
   const 시계 = () => within(패널()).getByRole("button", { name: "시계 없음" }) as HTMLButtonElement;
   const 확인창 = () => screen.getByRole("alertdialog");
+  const 칸 = (name: string) =>
+    within(screen.getByRole("grid", { name: "장기판" })).queryByRole("gridcell", { name });
 
   it("첫 수를 두면 쪽·급수가 잠기고 시계는 열려 있다. 끝난 판에서 새 대국을 누르면 풀린다", async () => {
     await start();
@@ -603,8 +605,13 @@ describe("쪽·급수는 내가 첫 수를 두면 잠긴다", () => {
     expect(급수().disabled).toBe(false);
   });
 
-  it("한을 잡아 엔진이 먼저 둬도 내가 두기 전에는 열려 있고, 초로 바꾸면 판을 처음부터 놓는다", async () => {
+  it("한을 잡아 엔진이 먼저 둬도 내가 두기 전에는 열려 있고, 초로 바꾸면 판을 처음부터 놓는다(상차림은 그대로)", async () => {
     await start();
+    // 기본(마상상마)이 아닌 상차림으로 놓는다. 다시 놓을 때 기본 판으로 돌아가면 이것이 풀린다.
+    const 초상차림 = within(패널().querySelector(".setup-row") as HTMLElement);
+    fireEvent.click(초상차림.getByRole("button", { name: "상마마상" }));
+    expect(칸("02 초 상")).not.toBeNull();
+
     fireEvent.click(쪽("한"));
     const enginesFirst = await engineReply(1);
     const { from, to } = splitMove(enginesFirst);
@@ -616,6 +623,8 @@ describe("쪽·급수는 내가 첫 수를 두면 잠긴다", () => {
     // 엔진이 둔 초의 첫 수가 내 수가 되지 않는다. 처음 국면이고 아무것도 잠기지 않았다.
     await waitFor(() => expect(piece(from)).not.toBeNull());
     expect(piece(to)).toBeNull();
+    expect(칸("02 초 상")).not.toBeNull();
+    expect(칸("03 초 마")).not.toBeNull();
     expect(쪽("한").disabled).toBe(false);
     expect(급수().disabled).toBe(false);
     await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
