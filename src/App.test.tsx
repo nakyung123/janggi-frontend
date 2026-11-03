@@ -22,6 +22,7 @@ import { START_FEN, parseFen } from "./janggi/board";
 import type { HistoryEntry } from "./janggi/history";
 import { nextEntry, startHistory } from "./janggi/history";
 import { describeMove, splitMove } from "./janggi/notation";
+import type { Side } from "./janggi/pieces";
 import { sideOf } from "./janggi/pieces";
 import { reviewMove } from "./janggi/review";
 import { FakeEngine } from "./test/fakeEngine";
@@ -619,6 +620,19 @@ describe("쪽·급수는 내가 첫 수를 두면 잠긴다", () => {
     expect(급수().disabled).toBe(false);
     await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
   });
+
+  it("내가 둔 뒤 처음까지 물러도 쪽·급수는 잠긴 채다", async () => {
+    // 되감은 수도 기보에 남아 있으면 센다. 무르기로 잠금을 푸는 길을 두지 않는다.
+    await start();
+    drag("c4", "c5");
+    await engineReply(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /무르기/ }));
+    await waitFor(() => expect(piece("c4")).not.toBeNull());
+    expect(piece("c5")).toBeNull();
+    expect(쪽("한").disabled).toBe(true);
+    expect(급수().disabled).toBe(true);
+  });
 });
 
 /*
@@ -632,9 +646,9 @@ describe("오래 둔 판을 새 대국으로 버리면 기권패로 남는다", 
 
   /**
    * 두던 판을 plies 수까지 둔 모양으로 넣는다. 양쪽 졸·병을 차례로 한 칸씩 앞으로, 열한째
-   * 수는 초의 졸을 옆으로.
+   * 수는 초의 졸을 옆으로. flagged 를 주면 그쪽의 시간패로 끝난 판이다.
    */
-  function 두던판(plies: number, id: string) {
+  function 두던판(plies: number, id: string, flagged: Side | null = null) {
     const 수: [Square, Square][] = [
       ["a4", "a5"], ["a7", "a6"], ["c4", "c5"], ["c7", "c6"], ["e4", "e5"],
       ["e7", "e6"], ["g4", "g5"], ["g7", "g6"], ["i4", "i5"], ["i7", "i6"],
@@ -644,7 +658,7 @@ describe("오래 둔 판을 새 대국으로 버리면 기권패로 남는다", 
     for (const [from, to] of 수.slice(0, plies)) {
       history = [...history, nextEntry(history[history.length - 1].fen, from, to)];
     }
-    writeStored("game", { id, history, cursor: plies, resigned: null, flagged: null });
+    writeStored("game", { id, history, cursor: plies, resigned: null, flagged });
   }
 
   const 확인창 = () => screen.getByRole("alertdialog");
@@ -691,6 +705,22 @@ describe("오래 둔 판을 새 대국으로 버리면 기권패로 남는다", 
     await waitFor(() => expect(piece("a7")).not.toBeNull());
     await new Promise((r) => setTimeout(r, 100));
     expect(기보()).toHaveLength(0);
+  });
+
+  it("10수를 두고 끝난 판은 새 대국을 확인해도 기보 목록의 결과가 그대로다", async () => {
+    // 끝난 판은 끝날 때 이미 목록에 들었다. 같은 판 번호로 기권패를 넣으면 그 결과를 덮는다.
+    두던판(10, "끝난-판", "cho"); // 초(나)의 시간패
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "닫기" }));
+    await waitFor(() => expect(기보()).toHaveLength(1));
+    const [끝난판] = 기보();
+    expect(끝난판.result).toEqual({ kind: "flag", winner: "han" });
+
+    expect(새대국().textContent).toContain("끝난 판은 기보 목록에서 다시 볼 수 있습니다.");
+    fireEvent.click(확인단추());
+
+    await waitFor(() => expect(piece("a4")).not.toBeNull());
+    expect(기보()).toEqual([끝난판]);
   });
 
   /*
