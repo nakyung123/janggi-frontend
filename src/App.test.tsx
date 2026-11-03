@@ -199,6 +199,20 @@ describe("힌트", () => {
     expect(hintButton().disabled).toBe(true);
   });
 
+  it("내 국면의 합법수를 받기 전에는 잠겨 있다", async () => {
+    // 엔진이 둔 직후에는 설정을 내 차례 것(실력 20)으로 바꾸는 일이 합법수 묻기보다 먼저 줄에
+    // 선다. 합법수가 왔으면 설정도 바뀌어 있다 - 그 전에 열면 상대 급수의 세기로 찾을 수 있다.
+    await start();
+    engine().holdProbe = (ref) => ref.moves.length === 2;
+    drag("c4", "c5");
+    await engineReply(1);
+    await waitFor(() => expect(engine().heldProbes).toBe(1));
+    expect(hintButton().disabled).toBe(true);
+
+    act(() => engine().releaseProbes());
+    await waitFor(() => expect(hintButton().disabled).toBe(false));
+  });
+
   it("수를 두면 화살표와 덧말이 사라진다", async () => {
     await start();
     fireEvent.click(hintButton());
