@@ -409,6 +409,8 @@ describe("실수한 곳부터 다시", () => {
     // 시작 국면은 한(나)의 차례다. 엔진은 두지 않고, 내가 기물을 집는다.
     await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
     expect(engine().answers, "대국 탭에서 받은 한 수뿐").toHaveLength(1);
+    // [힌트]도 한(나)의 차례에 열린다. 대국 탭의 쪽(초)으로 차례를 보면 여기서 잠긴다.
+    await waitFor(() => expect(hintButton().disabled).toBe(false));
 
     drag("a7", "a6");
     const reply = await engineReply(2);
