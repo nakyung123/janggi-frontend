@@ -66,6 +66,44 @@ test("한 판을 두고 기권한 뒤 복기까지 간다", async ({ page, isola
   expect(app.errors, "잡히지 않은 스크립트 오류").toEqual([]);
 });
 
+// 힌트: 진짜 엔진이 내 차례에 둘 수를 찾아 보이고, 그 수는 판에 둘 수 있는 수다.
+//
+// 단위 테스트(App.test.tsx)는 가짜 엔진으로 "화살표가 엔진이 고른 수와 같다" 를 본다. 여기서는
+// 진짜 엔진(가장 센 설정, 30만 노드)이 시간 안에 답을 내는지와, 그 수를 앱이 받아 두는지를 본다.
+//
+// Given 폰 폭 320, 배포용 빌드, 진짜 엔진, 초를 잡은 새 판(내 차례)
+// When  [힌트]를 누른다          Then "AI의 수 …" 와 파란 화살표가 서고 [힌트]가 잠긴다
+// When  그 수를 판에 둔다        Then 화살표와 그 한 줄이 사라지고, 엔진이 두고 내 차례가 된다
+test("힌트를 한 번 쓰고 그 수를 둔다", async ({ page }) => {
+  const app = new AppPage(page);
+  await app.open();
+
+  const note = await test.step("힌트를 누르면 AI 의 수가 선다", async () => {
+    await expect(app.hint, "합법수를 받으면 힌트가 열린다").toBeEnabled({ timeout: ENGINE_WAIT });
+    await app.hint.click();
+    await expect(app.hintNote).toBeVisible({ timeout: ENGINE_WAIT });
+    await expect(app.aiArrow).toHaveCount(1);
+    await expect(app.hint, "이미 찾은 국면에서는 잠긴다").toBeDisabled();
+    await app.noHorizontalScroll();
+    return (await app.hintNote.textContent()) ?? "";
+  });
+
+  await test.step("그 수를 두면 엔진이 이어 둔다", async () => {
+    // "AI의 수 73졸63" - 출발 좌표, 기물, 도착 좌표. 시작 국면에서 한수쉼은 최선이 아니다.
+    const move = /^AI의 수 (\d\d)(\D+)(\d\d)$/.exec(note.trim());
+    expect(move, `기보 표기를 읽는다: "${note}"`).not.toBeNull();
+    const [, from, , to] = move!;
+    await app.tapAt(from);
+    await app.tapAt(to);
+    await expect(app.aiArrow, "수를 두면 화살표가 사라진다").toHaveCount(0);
+    await expect(app.hintNote).toBeHidden();
+    await app.waitMyTurn();
+    await expect(app.hint, "내 차례가 되면 다시 열린다").toBeEnabled();
+  });
+
+  expect(app.errors, "잡히지 않은 스크립트 오류").toEqual([]);
+});
+
 // 엔진이 한 국면을 오래 보는 중에 멈춘다.
 //
 // 단일 스레드 엔진은 생각하는 중에 stop 을 받지 못해서, 앱이 엔진을 새로 띄워 끊는다

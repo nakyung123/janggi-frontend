@@ -67,8 +67,23 @@ export class AppPage {
    * 가로챈다" 로 보고 기다리기만 한다. 우회해 누르는 것(force)이 아니라 사람과 같은 자리를 누른다.
    */
   async tap(name: string) {
-    const box = await this.cell(name).boundingBox();
-    expect(box, `교차점 "${name}" 이 화면에 있다`).not.toBeNull();
+    await this.press(this.cell(name), `교차점 "${name}"`);
+  }
+
+  /**
+   * 기보 좌표("73")만으로 교차점을 누른다. 기물이 있든 없든 - 칸 이름이 좌표로 시작한다.
+   * 힌트처럼 기보 표기("AI의 수 73졸63")만 아는 수를 둘 때 쓴다.
+   */
+  async tapAt(coord: string) {
+    const cell = this.page
+      .getByRole("grid", { name: "장기판" })
+      .getByRole("gridcell", { name: new RegExp(`^${coord}( |$)`) });
+    await this.press(cell, `좌표 ${coord} 의 교차점`);
+  }
+
+  private async press(cell: Locator, what: string) {
+    const box = await cell.boundingBox();
+    expect(box, `${what} 이 화면에 있다`).not.toBeNull();
     await this.page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
   }
 
@@ -85,6 +100,20 @@ export class AppPage {
   }
   get pass() {
     return this.page.getByRole("button", { name: "한수쉼" });
+  }
+  get hint() {
+    return this.page.getByRole("button", { name: "힌트", exact: true });
+  }
+  /** 대국 칸 제목 줄의 힌트 한 줄. "AI의 수 73졸63" 처럼 선다. */
+  get hintNote() {
+    return this.page.getByText(/^AI의 수 /);
+  }
+  /**
+   * 판의 파란 화살표(AI 의 수). 판 그림의 일부라 역할·이름이 없다 - 화면 낭독기 대응은 하지
+   * 않기로 했다(사용자 결정). 그리는 데 쓰는 클래스로 찾는다. 수는 위 한 줄로 확인한다.
+   */
+  get aiArrow() {
+    return this.page.locator("svg.board line.best-arrow");
   }
   get resign() {
     return this.page.getByRole("button", { name: "기권", exact: true });

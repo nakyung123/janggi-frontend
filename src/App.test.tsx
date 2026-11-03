@@ -14,8 +14,11 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { positionKey } from "./engine/types";
-import { START_FEN } from "./janggi/board";
-import { splitMove } from "./janggi/notation";
+import { START_FEN, parseFen } from "./janggi/board";
+import { nextEntry, startHistory } from "./janggi/history";
+import { describeMove, splitMove } from "./janggi/notation";
+import { sideOf } from "./janggi/pieces";
+import { reviewMove } from "./janggi/review";
 import { FakeEngine } from "./test/fakeEngine";
 
 vi.mock("./engine/engine", async () => ({
@@ -53,6 +56,7 @@ const piece = (square: string) => document.querySelector(`[data-piece="${square}
 /** 지금 집어 들 수 있는 기물. 내 차례이고 엔진이 합법수를 알려 줬을 때만 생긴다. */
 const pickable = () => document.querySelectorAll(".piece:not(.fixed)");
 const passButton = () => screen.getByRole("button", { name: "한수쉼" }) as HTMLButtonElement;
+const hintButton = () => screen.getByRole("button", { name: "힌트" }) as HTMLButtonElement;
 
 /** 교차점의 화면 좌표. 판의 화면 크기를 SVG 좌표 그대로 뒀다(test/browser.ts). */
 function pointOf(square: string) {
@@ -134,6 +138,309 @@ describe("엔진과 한 판", () => {
     act(() => engine().releaseProbes());
     await waitFor(() => expect(passButton().disabled).toBe(false));
     expect(pickable().length).toBeGreaterThan(0);
+  });
+});
+
+describe("힌트", () => {
+  const arrow = () => document.querySelector("svg.board .best-arrow");
+  /** 대국 칸(연습 중이면 연습 칸) 제목 줄 오른쪽의 덧말 */
+  const panelMeta = () => document.querySelector(".panel-title .panel-meta")?.textContent ?? null;
+
+  it("내 차례에 누르면 엔진이 고른 수가 화살표와 덧말로 선다", async () => {
+    await start();
+    fireEvent.click(hintButton());
+
+    await waitFor(() => expect(arrow()).not.toBeNull());
+    const asked = engine().onceCalls;
+    expect(asked).toHaveLength(1);
+    const move = asked[0].answer!;
+    const { from, to } = splitMove(move);
+
+    // 화살표의 두 끝이 그 수의 출발·도착 교차점이다.
+    const line = arrow()!;
+    expect([line.getAttribute("x1"), line.getAttribute("y1")].map(Number)).toEqual(
+      Object.values(pointOf(from))
+    );
+    expect([line.getAttribute("x2"), line.getAttribute("y2")].map(Number)).toEqual(
+      Object.values(pointOf(to))
+    );
+    expect(panelMeta()).toBe(`AI의 수 ${describeMove(move, parseFen(START_FEN).board).short}`);
+
+    // 급수와 상관없이 가장 센 설정으로, 정한 탐색량으로 찾는다.
+    expect(asked[0].skill).toBe(20);
+    expect(asked[0].limits).toEqual({ nodes: 300_000, movetimeMs: 3_000 });
+
+    // 같은 국면에서 다시 누르면 다시 찾지 않는다.
+    expect(hintButton().disabled).toBe(true);
+  });
+
+  it("엔진 차례에는 눌리지 않고, 내 차례가 되면 눌린다", async () => {
+    engine().searchMs = 400;
+    await start();
+    drag("c4", "c5");
+    await waitFor(() => expect(hintButton().disabled).toBe(true));
+    await engineReply(1);
+    await waitFor(() => expect(hintButton().disabled).toBe(false));
+  });
+
+  it("무르고 [다시]로 간 국면이 엔진 쪽 차례면 눌리지 않는다", async () => {
+    // 엔진은 기보 끝에서만 둔다. 되짚은 국면은 엔진 쪽 차례여도 판이 열리는데, 여기서 찾으면
+    // 상대 기물의 수를 'AI의 수' 로 보인다.
+    await start();
+    drag("c4", "c5");
+    await engineReply(1);
+    await waitFor(() => expect(hintButton().disabled).toBe(false));
+
+    fireEvent.click(screen.getByRole("button", { name: /무르기/ }));
+    await waitFor(() => expect(piece("c4")).not.toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "다시" }));
+    await waitFor(() => expect(piece("c5")).not.toBeNull());
+    // 그 국면의 합법수가 와서 판이 열린 뒤에 본다 - 합법수 전이라 잠긴 것과 가른다.
+    await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
+    expect(hintButton().disabled).toBe(true);
+  });
+
+  it("내 국면의 합법수를 받기 전에는 잠겨 있다", async () => {
+    // 엔진이 둔 직후에는 설정을 내 차례 것(실력 20)으로 바꾸는 일이 합법수 묻기보다 먼저 줄에
+    // 선다. 합법수가 왔으면 설정도 바뀌어 있다 - 그 전에 열면 상대 급수의 세기로 찾을 수 있다.
+    await start();
+    engine().holdProbe = (ref) => ref.moves.length === 2;
+    drag("c4", "c5");
+    await engineReply(1);
+    await waitFor(() => expect(engine().heldProbes).toBe(1));
+    expect(hintButton().disabled).toBe(true);
+
+    act(() => engine().releaseProbes());
+    await waitFor(() => expect(hintButton().disabled).toBe(false));
+  });
+
+  it("수를 두면 화살표와 덧말이 사라진다", async () => {
+    await start();
+    fireEvent.click(hintButton());
+    await waitFor(() => expect(arrow()).not.toBeNull());
+
+    drag("c4", "c5");
+    await waitFor(() => expect(arrow()).toBeNull());
+    expect(panelMeta() ?? "").not.toMatch(/^AI의 수/);
+    await engineReply(1);
+    expect(arrow()).toBeNull();
+  });
+
+  it("찾는 동안 수를 두면 늦게 온 힌트는 버린다", async () => {
+    // 늦게 온 답을 새 국면의 것으로 읽으면 엉뚱한 자리에 화살표가 선다.
+    engine().holdOnce = true;
+    await start();
+    fireEvent.click(hintButton());
+    await waitFor(() => expect(panelMeta()).toBe("힌트를 찾는 중…"));
+
+    drag("c4", "c5");
+    await engineReply(1);
+    act(() => engine().releaseOnce());
+    await waitFor(() => expect(hintButton().disabled).toBe(false));
+    expect(arrow()).toBeNull();
+  });
+
+  it("끝난 판에서는 눌리지 않는다", async () => {
+    await start();
+    engine().probeAnswer = (ref) =>
+      ref.moves.length === 2 ? { checkers: ["e3"], legal: ["e2e2"] } : null;
+    drag("c4", "c5");
+    await engineReply(1);
+    await waitFor(() => expect(document.querySelector(".dialog.result")).not.toBeNull());
+    expect(hintButton().disabled).toBe(true);
+  });
+
+  it("힌트를 쓴 판도 끝나면 기보 목록에 평소대로 들어간다", async () => {
+    // 힌트를 쓴 판도 전적에 그대로 센다(2026-11-02 사용자 결정). 쓴 것을 어디에도 적지 않는다.
+    await start();
+    fireEvent.click(hintButton());
+    await waitFor(() => expect(arrow()).not.toBeNull());
+    // 기권은 한 수라도 둔 뒤에 열린다.
+    drag("c4", "c5");
+    await engineReply(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "기권" }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "기권" }));
+    await waitFor(() => expect(document.querySelector(".dialog.result")).not.toBeNull());
+
+    const saved = JSON.parse(localStorage.getItem("janggi:games") ?? "[]") as { result: { kind: string } }[];
+    expect(saved).toHaveLength(1);
+    expect(saved[0].result.kind).toBe("resign");
+  });
+});
+
+describe("실수한 곳부터 다시", () => {
+  /*
+   * 복기를 마친 판 하나. 내가 잡은 쪽(기본은 초)의 둘째 수가 큰 실수다 - 초면 셋째 수 e4e5,
+   * 한이면 넷째 수 e7e6. 기보 목록은 등급을 승률 하락에서 다시 매기므로(archive.ts 의 regrade)
+   * 점수로 정한다. 점수는 초 기준이라 한의 큰 실수는 점수가 오른다.
+   */
+  const 수순 = ["c4c5", "c7c6", "e4e5", "e7e6"];
+  const 큰실수 = {
+    cho: { played: "e4e5", best: "a4a5", scoreAfter: -8 },
+    han: { played: "e7e6", best: "a7a6", scoreAfter: 8 },
+  } as const;
+  function 복기한판(mySide: keyof typeof 큰실수 = "cho") {
+    const 실수 = 큰실수[mySide];
+    const history = startHistory(START_FEN);
+    for (const m of 수순) {
+      const { from, to } = splitMove(m);
+      history.push(nextEntry(history[history.length - 1].fen, from, to));
+    }
+    const reviewed = 수순.map((m, i) =>
+      reviewMove({
+        index: i + 1,
+        mover: i % 2 === 0 ? "cho" : "han",
+        before: parseFen(history[i].fen).board,
+        after: parseFen(history[i + 1].fen).board,
+        played: m,
+        best: m === 실수.played ? 실수.best : m,
+        replyPv: [],
+        scoreBefore: 0,
+        scoreAfter: m === 실수.played ? 실수.scoreAfter : 0,
+        bestGivesCheck: false,
+      })
+    );
+    return {
+      id: "reviewed-1",
+      endedAt: Date.now() - 60_000,
+      mySide,
+      levelId: "k12",
+      levelName: "12급",
+      variant: "janggi",
+      result: { kind: "resign", winner: mySide === "cho" ? "han" : "cho" },
+      history,
+      reviewed,
+    };
+  }
+
+  const 다시두기 = () => screen.queryByRole("button", { name: "이 수 전부터 다시 두기" });
+  const 이전 = () => fireEvent.click(screen.getByRole("button", { name: /이전|무르기/ }));
+  const 연습칸 = () => document.querySelector(".panel.practice");
+  const 저장된판들 = () => JSON.parse(localStorage.getItem("janggi:games") ?? "[]") as { id: string }[];
+
+  /** 대국 탭에서 한 수 두고(두던 판), 기보 탭에서 복기한 판을 연다. 판은 마지막 수(한의 수)에 선다. */
+  async function 복기한판을연다(mySide: keyof typeof 큰실수 = "cho") {
+    localStorage.setItem("janggi:games", JSON.stringify([복기한판(mySide)]));
+    await start();
+    drag("c4", "c5");
+    await engineReply(1);
+    fireEvent.click(screen.getByRole("button", { name: /^기보/ }));
+    await waitFor(() => expect(document.querySelectorAll(".game-card")).toHaveLength(1));
+    fireEvent.click(document.querySelector(".game-card")!);
+    await screen.findByRole("button", { name: "다시 복기" });
+  }
+
+  it("내가 둔 큰 실수 자리에만 단추가 서고, 지난 판에는 힌트가 없다", async () => {
+    await 복기한판을연다();
+    expect(screen.queryByRole("button", { name: "힌트" })).toBeNull();
+    expect(다시두기(), "4수째 - 한의 수").toBeNull();
+    이전();
+    expect(다시두기(), "3수째 - 나의 큰 실수").not.toBeNull();
+    이전();
+    expect(다시두기(), "2수째 - 한의 수").toBeNull();
+    이전();
+    expect(다시두기(), "1수째 - 나의 최선수").toBeNull();
+  });
+
+  it("누르면 그 수를 두기 전 국면이 서고, 내가 두면 엔진이 이어 둔다. 두던 판은 그대로다", async () => {
+    await 복기한판을연다();
+    const 두던판 = localStorage.getItem("janggi:game");
+    이전();
+    fireEvent.click(다시두기()!);
+
+    // 큰 실수(e4e5)를 두기 전 국면 - 앞의 두 수는 둔 채로, e4 의 졸은 아직 제자리다.
+    await waitFor(() => expect(연습칸()).not.toBeNull());
+    expect(piece("c5")).not.toBeNull();
+    expect(piece("c6")).not.toBeNull();
+    expect(piece("e4")).not.toBeNull();
+    expect(piece("e5")).toBeNull();
+    expect(screen.queryByRole("button", { name: "다시 복기" })).toBeNull();
+    expect(연습칸()!.textContent).toContain("초의 2번째 수(75졸65) 전 국면부터 12급과 다시 둡니다.");
+
+    // 연습 시작 국면 앞으로는 되짚지 않는다.
+    expect((screen.getByRole("button", { name: "처음으로" }) as HTMLButtonElement).disabled).toBe(true);
+
+    await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
+    drag("a4", "a5");
+    await engineReply(2);
+    expect(piece("a5")).not.toBeNull();
+
+    // 무르면 연습 시작 국면까지만 간다.
+    fireEvent.click(screen.getByRole("button", { name: /무르기/ }));
+    await waitFor(() => expect(piece("a4")).not.toBeNull());
+    expect((screen.getByRole("button", { name: "처음으로" }) as HTMLButtonElement).disabled).toBe(true);
+
+    // 복기로 돌아가면 보던 수(큰 실수)에 선다.
+    fireEvent.click(screen.getByRole("button", { name: "복기로 돌아가기" }));
+    await waitFor(() => expect(다시두기()).not.toBeNull());
+    expect(piece("e5")).not.toBeNull();
+
+    // 대국 탭의 두던 판은 그대로다.
+    fireEvent.click(screen.getByRole("button", { name: "대국" }));
+    await waitFor(() => expect(piece("c5")).not.toBeNull());
+    expect(localStorage.getItem("janggi:game")).toBe(두던판);
+  });
+
+  it("무르고 [다시]로 간 엔진 쪽 차례에는 힌트가 눌리지 않는다", async () => {
+    await 복기한판을연다();
+    이전();
+    fireEvent.click(다시두기()!);
+    await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
+    drag("a4", "a5");
+    await engineReply(2);
+
+    fireEvent.click(screen.getByRole("button", { name: /무르기/ }));
+    await waitFor(() => expect(piece("a4")).not.toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "다시" }));
+    await waitFor(() => expect(piece("a5")).not.toBeNull());
+    await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
+    expect(hintButton().disabled).toBe(true);
+  });
+
+  it("한을 잡은 판은 대국 탭이 초여도 한으로 두고, 엔진은 초의 수만 둔다", async () => {
+    // 연습 판의 쪽은 그 판에서 잡은 쪽이다. 대국 탭의 쪽을 따르면 엔진이 내 쪽(한)의 수를 둔다.
+    await 복기한판을연다("han");
+    // 마지막 수(한의 e7e6)가 큰 실수라 되짚지 않고 연다.
+    fireEvent.click(다시두기()!);
+    await waitFor(() => expect(연습칸()).not.toBeNull());
+    expect(연습칸()!.textContent).toContain("한의 2번째 수");
+
+    // 시작 국면은 한(나)의 차례다. 엔진은 두지 않고, 내가 기물을 집는다.
+    await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
+    expect(engine().answers, "대국 탭에서 받은 한 수뿐").toHaveLength(1);
+    // [힌트]도 한(나)의 차례에 열린다. 대국 탭의 쪽(초)으로 차례를 보면 여기서 잠긴다.
+    await waitFor(() => expect(hintButton().disabled).toBe(false));
+
+    drag("a7", "a6");
+    const reply = await engineReply(2);
+    const 받기전 = ["c4c5", "c7c6", "e4e5", "a7a6"].reduce((fen, m) => {
+      const { from, to } = splitMove(m);
+      return nextEntry(fen, from, to).fen;
+    }, START_FEN);
+    expect(sideOf(parseFen(받기전).board[splitMove(reply).from]!)).toBe("cho");
+  });
+
+  it("연습 판은 끝나도 기보 목록에 들지 않고 결과 창도 뜨지 않는다", async () => {
+    await 복기한판을연다();
+    이전();
+    fireEvent.click(다시두기()!);
+    await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
+
+    // 내가 두고 엔진이 받은 국면(앞 두 수 + 둘)을 외통으로 꾸민다. 차례인 초(나)가 진다.
+    engine().probeAnswer = (ref) =>
+      ref.moves.length === 4 && ref.moves[2] === "a4a5" ? { checkers: ["e3"], legal: ["e2e2"] } : null;
+    drag("a4", "a5");
+    await engineReply(2);
+
+    await waitFor(() => expect(연습칸()!.textContent).toContain("외통 - 한이 이겼습니다."));
+    expect(document.querySelector(".dialog.result")).toBeNull();
+    expect(저장된판들().map((g) => g.id)).toEqual(["reviewed-1"]);
+
+    // 처음부터 다시 두면 연습 시작 국면으로 돌아간다.
+    fireEvent.click(screen.getByRole("button", { name: "처음부터 다시" }));
+    await waitFor(() => expect(piece("a4")).not.toBeNull());
+    expect(piece("a5")).toBeNull();
   });
 });
 

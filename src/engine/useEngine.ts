@@ -1,9 +1,10 @@
-// 엔진을 React 에서 쓰는 훅 둘
+// 엔진을 React 에서 쓰는 훅 셋
 //
 //   useEngine    엔진(WASM)을 내려받아 띄우고, 준비 상태·진행률·오류를 알린다
 //   useAnalysis  국면이 바뀔 때마다 합법수·장군을 묻고, 엔진 차례면 둘 수를 찾는다
+//   useHint      내 차례에 누르면 그 국면에서 둘 수를 한 번 찾는다
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { noteTrouble } from "../report/errors";
 import { track } from "../report/events";
 import { JanggiEngine } from "./engine";
@@ -246,6 +247,83 @@ export function useAnalysis(
     legal: probed ? probe.legal : NO_MOVES,
     checkers: probed ? probe.checkers : NO_CHECKERS,
     probed,
+  };
+}
+
+export interface HintState {
+  /** 지금 국면에서 찾은 수(엔진 좌표, 예: a4b4). 아직 안 찾았으면 null. */
+  move: string | null;
+  /** 지금 국면의 힌트를 찾는 중인지 */
+  searching: boolean;
+  /** 지금 국면에서 찾다가 못 찾았는지. 다시 누를 수 있다. */
+  failed: boolean;
+  /** 지금 국면에서 둘 수를 한 번 찾는다. 찾는 중이거나 이미 찾았으면 아무 일도 없다. */
+  ask: () => void;
+}
+
+/**
+ * 내 차례에 누르면 그 국면에서 둘 수를 한 번 찾는다(힌트).
+ *
+ * 엔진의 실력 손잡이는 따로 바꾸지 않는다. 내 차례에는 App 이 이미 가장 센 값(20)으로 둔다
+ * (App 의 options) - 엔진은 하나라 여기서 바꾸면 App 이 건 설정과 엇갈린다.
+ *
+ * 답에 국면 열쇠를 단다. 찾는 동안 수를 두거나 무르면 늦게 온 답을 버린다 - 새 국면의 것으로
+ * 읽으면 엉뚱한 자리에 화살표가 선다. 국면이 바뀌면 찾아 둔 수도 버린다. 무르다가 그 국면에
+ * 돌아와도 저절로 뜨지 않고, 누른 국면에서만 보인다.
+ *
+ * 돌던 탐색을 여기서 끊지는 않는다. 국면이 내 차례로 바뀌면 useAnalysis 가, 엔진 차례로
+ * 바뀌면 App 의 엔진 설정이 바뀌면서 setOptions 가 stop 을 보낸다. 한 번 더 보내면 그 사이에
+ * 줄을 선 엔진의 탐색까지 버려질 수 있다(engine.ts 의 searchGen).
+ */
+export function useHint(
+  engine: JanggiEngine | null,
+  ref: PositionRef,
+  limits: SearchLimits
+): HintState {
+  const key = positionKey(ref);
+  const keyRef = useRef(key);
+  keyRef.current = key;
+  const refBox = useRef(ref);
+  refBox.current = ref;
+
+  const [hint, setHint] = useState<{
+    key: string;
+    status: "searching" | "found" | "failed";
+    move: string | null;
+  } | null>(null);
+
+  // 국면이 바뀌면 그 국면의 힌트는 끝이다.
+  useEffect(() => {
+    setHint((h) => (h && h.key !== key ? null : h));
+  }, [key]);
+
+  const current = hint && hint.key === key ? hint : null;
+
+  const ask = useCallback(() => {
+    if (!engine || (current && current.status !== "failed")) return;
+    const asked = keyRef.current;
+    setHint({ key: asked, status: "searching", move: null });
+    engine.analyzeOnce(refBox.current, limits).then(
+      (snap) => {
+        const move = snap.bestmove ?? snap.lines[0]?.pv[0] ?? null;
+        setHint((h) =>
+          h?.key === asked ? { key: asked, status: move ? "found" : "failed", move } : h
+        );
+      },
+      (err: unknown) => {
+        // 국면이 이미 바뀌었으면 끊긴 것이 맞다. 같은 국면에서 못 찾았을 때만 적고 알린다.
+        if (keyRef.current !== asked) return;
+        noteTrouble("힌트", err);
+        setHint((h) => (h?.key === asked ? { key: asked, status: "failed", move: null } : h));
+      }
+    );
+  }, [engine, current, limits]);
+
+  return {
+    move: current?.status === "found" ? current.move : null,
+    searching: current?.status === "searching",
+    failed: current?.status === "failed",
+    ask,
   };
 }
 

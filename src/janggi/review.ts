@@ -374,6 +374,16 @@ export function bestArrowOf(r: ReviewedMove | null) {
   return { from, to };
 }
 
+/**
+ * 이 수를 두기 전 국면부터 AI 와 다시 둘 수 있는지. 내가 둔 큰 실수에서만 연다.
+ *
+ * 아쉬운 수까지 열면 단추가 거의 매 수 서서 정작 크게 잃은 자리가 묻힌다. 상대(AI)의
+ * 수에서 열면 내 실수를 다시 두는 것이 아니다.
+ */
+export function canPracticeFrom(r: ReviewedMove | null, mySide: Side): boolean {
+  return r !== null && r.mover === mySide && r.grade === "blunder";
+}
+
 // --- 기보 한 판 훑기 -----------------------------------------------------
 
 /**

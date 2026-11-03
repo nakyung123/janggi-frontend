@@ -1,14 +1,15 @@
 // 장기 AI — 화면 조립과 대국 흐름
 //
-// 판은 둘이다. 대국 탭의 두던 판(play*)과, 기보 탭에서 목록에서 골라 연 지난 판
-// (openGame). 아래의 history·cursor 는 '지금 화면에 떠 있는 판' 이라 탭에 따라 둘
-// 중 하나를 가리킨다. 두던 판은 대국 탭만 만지고, 기보 탭은 연 판을 읽기만 한다.
+// 판은 셋이다. 대국 탭의 두던 판(play*)과, 기보 탭에서 목록에서 골라 연 지난 판
+// (openGame), 그 지난 판의 한 국면부터 AI 와 다시 두는 연습 판(practice). 아래의
+// history·cursor 는 '지금 화면에 떠 있는 판' 이라 탭에 따라 셋 중 하나를 가리킨다. 두던 판은
+// 대국 탭만 만지고, 기보 탭은 연 판을 읽기만 하고, 연습 판은 기보 탭의 연 판 자리에 선다.
 //
 // 여기서 하는 일
 //   · 화면 고르기 — 메뉴 목록(screens.ts)의 화면 하나. 대국·기보는 여기서 그리고, 나머지는
 //     목록에 적힌 컴포넌트를 헤더 아래에 세운다
 //   · 두던 판 — 수 두기, 엔진 차례, 무르기, 새 대국·기권, 끝난 판을 기보 목록에 넣기
-//   · 기보 탭 — 판 열기, 복기, 파일로 저장·불러오기
+//   · 기보 탭 — 판 열기, 복기, 연습, 파일로 저장·불러오기
 //   · 화면 — 왼쪽 메뉴(넓은 화면) / 헤더 / 판 칸(판, 폰에서는 위아래 대국자 카드) / 오른쪽 칸(대국자 카드,
 //     판 조작 줄, 대국 패널 또는 복기·형세·기보)
 //
@@ -26,6 +27,7 @@ import { track } from "./report/events";
 import { EvalGraph } from "./components/games/EvalGraph";
 import { GameBar } from "./components/games/GameBar";
 import { GameList } from "./components/games/GameList";
+import { PracticePanel } from "./components/games/PracticePanel";
 import { ReviewPanel } from "./components/games/ReviewPanel";
 import { AppHeader } from "./components/layout/AppHeader";
 import { BootScreen } from "./components/layout/BootScreen";
@@ -40,6 +42,7 @@ import {
   DEFAULT_LEVEL_ID,
   DEFAULT_REVIEW_DEPTH_ID,
   ENGINE_MOVE_CAP_MS,
+  HINT_LIMITS,
   LEVELS,
   MIN_THINK_MS,
   REVIEW_DEPTHS,
@@ -50,7 +53,7 @@ import {
 } from "./engine/levels";
 import type { EngineOptions, PositionRef, SearchLimits, Variant } from "./engine/types";
 import { forgetIfMoved, isEnginePrefs, isVariant, positionKey } from "./engine/types";
-import { useAnalysis, useEngine } from "./engine/useEngine";
+import { useAnalysis, useEngine, useHint } from "./engine/useEngine";
 import { useBoardFit } from "./hooks/useBoardFit";
 import { useClockTicking, useGameClock } from "./hooks/useGameClock";
 import { useKeyboard } from "./hooks/useKeyboard";
@@ -59,6 +62,7 @@ import { readStored, usePersisted, writeStored } from "./hooks/usePersisted";
 import { useBoardTouch } from "./hooks/useBoardTouch";
 import { useCallout } from "./hooks/useCallout";
 import { useGames } from "./hooks/useGames";
+import { usePractice } from "./hooks/usePractice";
 import { useServerGames } from "./hooks/useServerGames";
 import { useReview } from "./hooks/useReview";
 
@@ -69,10 +73,10 @@ import { START_FEN, parseFen, toFen, undoTarget } from "./janggi/board";
 import { CLOCK_PRESETS, DEFAULT_CLOCK_ID, clockPresetById, moveBudgetMs } from "./janggi/clock";
 import type { HistoryEntry } from "./janggi/history";
 import { hangulHistory, movesOf, nextEntry, startHistory } from "./janggi/history";
-import { arrowOf, splitMove } from "./janggi/notation";
+import { arrowOf, describeMove, splitMove } from "./janggi/notation";
 import type { PieceChar, PieceType, Side } from "./janggi/pieces";
 import { sideOf } from "./janggi/pieces";
-import { bestArrowOf } from "./janggi/review";
+import { bestArrowOf, canPracticeFrom } from "./janggi/review";
 import type { SavedGame } from "./janggi/savedGame";
 import { isSavedGame } from "./janggi/savedGame";
 import { applySetup, detectSetup } from "./janggi/setups";
@@ -188,6 +192,17 @@ export default function App() {
   const { games, setGames, openGame, listView } = archive;
 
   /*
+   * 연습 - 복기한 판의 내 큰 실수 자리에서, 그 수를 두기 전 국면부터 AI 와 다시 둔다. 기보 탭의
+   * 연 판 자리에서 두고, 대국 탭의 두던 판은 건드리지 않는다. 기보에 남기지 않는다(까닭은
+   * usePractice 주석). 시작한 그 판을 열고 있을 때만 선다.
+   */
+  const practiceState = usePractice();
+  const practice =
+    practiceState.practice && openGame?.id === practiceState.practice.gameId
+      ? practiceState.practice
+      : null;
+
+  /*
    * 로그인 상태와 "서버에도 남기기". 목록을 넘겨주면 바뀌는 것을 보고 알아서 올린다 -
    * 판이 끝나는 자리와 복기가 끝나는 자리에 각각 붙이지 않는 까닭은 그 훅 주석에 있다.
    */
@@ -205,10 +220,21 @@ export default function App() {
       ? review.partial
       : null;
 
-  const history = openGame ? (partial?.history ?? openGame.history) : playHistory;
-  const cursor = openGame ? archive.cursor : playCursor;
-  const setCursor = openGame ? archive.setCursor : setPlayCursor;
-  const reviewed = openGame?.reviewed ?? partial?.reviewed ?? null;
+  const history = practice
+    ? practice.history
+    : openGame
+      ? (partial?.history ?? openGame.history)
+      : playHistory;
+  const cursor = practice ? practice.cursor : openGame ? archive.cursor : playCursor;
+  const setCursor = practice
+    ? practiceState.setCursor
+    : openGame
+      ? archive.setCursor
+      : setPlayCursor;
+  /** 되짚을 수 있는 가장 앞 칸. 연습 판은 연습을 시작한 국면이다. */
+  const first = practice ? practice.start : 0;
+  /** 연 판의 복기. 연습 판을 두는 동안에는 복기 칸이 빠진다. */
+  const reviewed = practice ? null : (openGame?.reviewed ?? partial?.reviewed ?? null);
   const boardFlipped = openGame ? archive.flipped : flipped;
 
   const entry = history[cursor];
@@ -256,10 +282,18 @@ export default function App() {
 
   // --- 엔진 차례 --------------------------------------------------------
 
-  const engineSide: Side | null = mode === "play" ? (mySide === "cho" ? "han" : "cho") : null;
+  /** 엔진이 두는 쪽. 대국 탭의 판과 연습 판에서만 둔다. 지난 판은 읽기만 한다. */
+  const engineSide: Side | null =
+    mode === "play"
+      ? (mySide === "cho" ? "han" : "cho")
+      : practice
+        ? (practice.mySide === "cho" ? "han" : "cho")
+        : null;
   /** 기보 끝을 보고 있는지. 무르거나 되짚는 중에는 엔진이 두지 않는다(기보를 잘라먹지 않게). */
   const atTip = cursor === history.length - 1;
-  const engineTurn = mode === "play" && atTip && engineSide === position.turn;
+  const engineTurn = engineSide !== null && atTip && engineSide === position.turn;
+  /** 엔진이 두는 급수. 연습 판은 그 판의 급수다(usePractice). */
+  const engineLevel = practice ? levelById(practice.levelId) : level;
 
   /**
    * 엔진이 이번 수에 쓸 시간(ms). 0 이면 시계를 쓰지 않는다.
@@ -268,12 +302,13 @@ export default function App() {
    */
   const [moveBudget, setMoveBudget] = useState(0);
   useEffect(() => {
-    if (!clockSettings.enabled || !engineTurn) {
+    // 시계는 대국 탭의 판에만 있다. 연습 판은 시간에 쫓기지 않는다.
+    if (!clockSettings.enabled || !engineTurn || mode !== "play") {
       setMoveBudget(0);
       return;
     }
     setMoveBudget(Math.round(moveBudgetMs(clocksRef.current[position.turn], clockSettings)));
-  }, [engineTurn, position.turn, entry.fen, clockSettings, clocksRef]);
+  }, [engineTurn, mode, position.turn, entry.fen, clockSettings, clocksRef]);
 
   /**
    * 엔진의 탐색량. 급수대로 노드를 걸고 시간 한계도 함께 건다. 엔진은 둘 중 먼저 닿는
@@ -281,8 +316,8 @@ export default function App() {
    * 수백만이라 상한이 없으면 한 수에 분 단위로 기다린다.
    */
   const searchLimits: SearchLimits = useMemo(
-    () => ({ ...limitsOf(level), movetimeMs: moveBudget > 0 ? moveBudget : ENGINE_MOVE_CAP_MS }),
-    [level, moveBudget]
+    () => ({ ...limitsOf(engineLevel), movetimeMs: moveBudget > 0 ? moveBudget : ENGINE_MOVE_CAP_MS }),
+    [engineLevel, moveBudget]
   );
 
   const options: EngineOptions = useMemo(
@@ -291,10 +326,11 @@ export default function App() {
       variant,
       // 엔진은 제 수 하나만 고른다. 후보를 넓게 보면 느려질 뿐이다.
       multiPV: 1,
-      // 제 차례가 아니면 합법수·장군만 물으므로 실력은 상관없다.
-      skill: engineTurn ? level.skill : 20,
+      // 제 차례가 아니면 가장 센 값이다. 합법수·장군만 물을 때는 실력이 상관없고, 힌트(useHint)는
+      // 이 값으로 찾는다 - 상대 급수의 세기로 찾으면 일부러 고른 나쁜 수를 가르친다.
+      skill: engineTurn ? engineLevel.skill : 20,
     }),
-    [prefs, variant, engineTurn, level.skill]
+    [prefs, variant, engineTurn, engineLevel.skill]
   );
 
   /** 탐색을 다시 걸어야 하는지 가리는 열쇠. 이 값이 바뀔 때만 useAnalysis 가 새로 묻는다. */
@@ -331,6 +367,13 @@ export default function App() {
     searchLimits,
     optionsKey
   );
+
+  /*
+   * 힌트 - 내 차례에 누르면 이 국면에서 둘 수를 한 번 찾는다. 판에는 복기의 'AI의 수' 와
+   * 같은 파란 화살표로, 대국 칸 제목 줄에는 기보 표기로 보인다. 쓴 것은 어디에도 적지 않고,
+   * 힌트를 쓴 판도 평소대로 센다(무른 판과 같은 기준, 2026-11-02 사용자 결정).
+   */
+  const hint = useHint(engine, positionRef, HINT_LIMITS);
 
   // --- 판정 ------------------------------------------------------------
 
@@ -371,14 +414,23 @@ export default function App() {
    * 붙어 있으면 그 국면에서 기권한 것처럼 읽힌다. 중단한 판은 적을 결과가 없다.
    */
   const viewOutcome: Outcome | null = useMemo(() => {
-    if (!openGame || !atTip) return null;
+    if (!openGame || practice || !atTip) return null;
     const { kind, winner } = openGame.result;
     if (kind === "abandoned") return null;
     return { kind, winner };
-  }, [openGame, atTip]);
+  }, [openGame, practice, atTip]);
+
+  /**
+   * 연습 판이 지금 보는 국면에서 끝났는지. 기권·시간패가 없어 국면 판정만 본다. 기보 목록에
+   * 넣는 길(아래)은 대국 탭의 결과(outcome)만 보므로 연습 판은 끝나도 목록에 들지 않는다.
+   */
+  const practiceOutcome = useMemo(
+    () => (practice ? outcomeOf(gstatus, null, null) : null),
+    [practice, gstatus]
+  );
 
   /** 대국자 카드와 화면 읽기에 알릴 결과. 있으면 두 카드를 다 눌러 둔다(둘 차례가 없다). */
-  const shownOutcome = mode === "play" ? outcome : viewOutcome;
+  const shownOutcome = mode === "play" ? outcome : practice ? practiceOutcome : viewOutcome;
   const showOver = shownOutcome !== null;
 
   // 수를 둘 때마다 두던 판을 남긴다(savedGame.ts). 시계는 넣지 않는다.
@@ -464,11 +516,12 @@ export default function App() {
    * 방금 둔 수로 장군·멍군·빅장이 걸렸으면 판 가운데에 한 번 외친다. 어느 국면에서
    * 외쳤는지와 앞 국면이 장군이었는지를 기억해야 해서 따로 뒀다(useCallout).
    */
+  const practicing = practice !== null;
   const callouts = useCallout({
-    active: mode === "play",
+    active: mode === "play" || practicing,
     probed,
     checkers,
-    cursor: playCursor,
+    cursor,
     kind: gstatus.kind,
   });
 
@@ -493,27 +546,33 @@ export default function App() {
   /**
    * 한 수를 둔다. 사람의 수도 엔진의 수도 여기를 지난다. from === to 는 한수쉼.
    * animate 가 false 면 날리지 않는다(끌어서 둔 수는 이미 손으로 옮겼다).
-   * 되짚던 자리에서 두면 그 뒤의 수는 버리고 새로 잇는다.
+   * 되짚던 자리에서 두면 그 뒤의 수는 버리고 새로 잇는다. 연습 판의 수는 연습 판에 두고,
+   * 시계는 대국 탭의 판에만 있다.
    */
+  const practicePush = practiceState.push;
   const pushMove = useCallback(
     (from: Square, to: Square, animate = true) => {
       // 소리는 판을 고치기 전에 낸다 - 잡는 수인지 지금 판에서 본다.
       playMoveSound(from !== to && position.board[to] ? "capture" : "move");
       setFly(
         animate && from !== to
-          ? { from, to, captured: position.board[to], ply: playCursor + 1, key: Date.now() }
+          ? { from, to, captured: position.board[to], ply: cursor + 1, key: Date.now() }
           : null
       );
-      callouts.justMoved(playCursor + 1);
+      callouts.justMoved(cursor + 1);
+      setSelected(null);
+      if (practicing) {
+        practicePush(from, to);
+        return;
+      }
       setPlayHistory((prev) => {
-        const base = prev.slice(0, playCursor + 1);
+        const base = prev.slice(0, cursor + 1);
         return [...base, nextEntry(base[base.length - 1].fen, from, to)];
       });
       setPlayCursor((c) => c + 1);
-      setSelected(null);
       commitClock(mover);
     },
-    [playCursor, mover, position.board, commitClock, callouts]
+    [cursor, mover, position.board, commitClock, callouts, practicing, practicePush]
   );
 
   // --- 시계 ------------------------------------------------------------
@@ -535,7 +594,8 @@ export default function App() {
     // 국면을 벗어났으면 기억을 버린다. 안 버리면 무르고 같은 수를 다시 뒀을 때 엔진이 영영 두지 않는다.
     playedFor.current = forgetIfMoved(playedFor.current, key);
 
-    if (!engineTurn || over) return;
+    // 대국 탭의 판이든 연습 판이든, 지금 국면에서 끝났으면 두지 않는다.
+    if (!engineTurn || showOver) return;
     if (!snapshot || snapshot.running || !snapshot.bestmove) return;
     if (playedFor.current === key) return;
     const { from, to } = splitMove(snapshot.bestmove);
@@ -547,7 +607,7 @@ export default function App() {
       pushMove(from, to);
     }, MIN_THINK_MS);
     return () => window.clearTimeout(timer);
-  }, [engineTurn, snapshot, positionRef, pushMove, over]);
+  }, [engineTurn, snapshot, positionRef, pushMove, showOver]);
 
   // --- 기보 오가기 --------------------------------------------------------
 
@@ -561,10 +621,12 @@ export default function App() {
    * 두 칸 이상(처음·끝·무르기·슬라이더로 멀리)은 날리지 않는다. 지나친 수를 다 건너뛰는
    * 것이라 날릴 '한 수' 가 없고, 한 수만 날리면 나머지가 순간이동한 것처럼 보여 오히려
    * 거짓말이 된다.
+   *
+   * 연습 판은 연습을 시작한 국면(first) 앞으로 가지 않는다.
    */
   const goTo = useCallback(
     (i: number) => {
-      const next = Math.max(0, Math.min(history.length - 1, i));
+      const next = Math.max(first, Math.min(history.length - 1, i));
       if (next === cursor) return;
       setSelected(null);
 
@@ -587,24 +649,26 @@ export default function App() {
       );
       setCursor(next);
     },
-    [cursor, history, setCursor]
+    [cursor, first, history, setCursor]
   );
 
   /**
    * 대국의 무르기. 내 차례가 나올 때까지(보통 내 수 + 엔진 응수 두 칸) 되감는다.
    * 한 칸만 되감으면 엔진 차례에 멈추는데, 기보 끝이 아니라 엔진이 두지 않아서 판이
    * 조용히 멈춘 것처럼 보인다. 기보 탭과 끝난 판의 '이전' 은 한 칸씩(goTo)이다.
+   * 연습 판도 같고, 연습을 시작한 국면 앞으로는 연습 판의 setCursor 가 막는다.
    */
+  const undoSide = practice ? practice.mySide : mySide;
   const undoMove = useCallback(() => {
     setSelected(null);
-    setPlayCursor((c) =>
+    setCursor((c) =>
       undoTarget(
-        playHistory.map((h) => h.fen),
+        history.map((h) => h.fen),
         c,
-        mySide
+        undoSide
       )
     );
-  }, [mySide, playHistory]);
+  }, [undoSide, history, setCursor]);
 
   const flip = useCallback(
     () => (openGame ? archive.flip() : setFlipped((f) => !f)),
@@ -616,8 +680,26 @@ export default function App() {
   /**
    * 판을 만질 수 있는지. 대국 탭에서 내 차례에만, 판이 끝나기 전까지. 기보 탭은 읽기만 한다.
    * over 가 아니라 ended 를 본다 - 끝난 판을 앞 국면으로 되짚어도 잠겨 있어야 한다.
+   *
+   * 연습 판은 지금 국면에서 끝나지 않았으면 내 차례에 만진다. 끝난 연습 판을 무르고 다시 두는
+   * 것은 막지 않는다 - 연습이라 다른 수를 둬 보는 것이 쓸모다.
    */
-  const canTouchBoard = mode === "play" && !ended && !engineTurn;
+  const canTouchBoard = practice
+    ? practiceOutcome === null && !engineTurn
+    : mode === "play" && !ended && !engineTurn;
+
+  /**
+   * 힌트를 찾을 수 있는지. 둘 수 있는 국면이고 내 차례여야 하며, 찾는 중이거나 이미 찾았으면 잠근다.
+   *
+   * 내 차례는 따로 본다. canTouchBoard 는 기보 끝의 엔진 차례만 막아서, 무르고 [다시]로 간 국면은
+   * 엔진 쪽 차례여도 참이다. 그 국면에서 찾으면 상대 기물의 수를 'AI의 수' 로 보인다.
+   *
+   * 그 국면의 합법수를 받기 전에도 잠근다. 엔진은 일을 줄 세워 하는데, 엔진이 둔 직후에는
+   * 설정을 내 차례 것(실력 20)으로 바꾸는 일이 합법수 묻기보다 먼저 줄에 선다. 합법수가 왔으면
+   * 설정도 바뀌어 있다 - 그 전에 누르면 힌트가 상대 급수의 세기로 찾아질 수 있다.
+   */
+  const canHint =
+    canTouchBoard && position.turn !== engineSide && probed && !hint.searching && hint.move === null;
 
   /** 집고·끌고·한수쉼. 엔진이 알려 준 합법수를 '이 기물은 어디로 가나' 로 바꾼다. */
   const touch = useBoardTouch({
@@ -677,6 +759,34 @@ export default function App() {
 
   const resign = () => setResigned(mySide);
 
+  // --- 연습 판 -----------------------------------------------------------
+
+  /**
+   * 지금 보는 수(복기한 판의 내 큰 실수)를 두기 전 국면부터 연습을 시작한다. AI 급수는 그
+   * 판의 급수이고, 사다리에 없으면(불러온 기보) 대국 탭의 급수다.
+   */
+  const startPractice = () => {
+    if (!openGame || review.running) return;
+    practiceState.start(openGame, cursor, levelId);
+    setSelected(null);
+    forgetMoves();
+  };
+
+  /** 연습 판을 연습을 시작한 국면으로 되돌린다. */
+  const restartPractice = () => {
+    practiceState.restart();
+    setSelected(null);
+    forgetMoves();
+  };
+
+  /** 연습을 끝낸다. 연 판은 복기에서 보던 수(연습을 시작한 수)로 돌아온다. */
+  const stopPractice = () => {
+    if (!practiceState.practice) return;
+    practiceState.stop();
+    setSelected(null);
+    forgetMoves();
+  };
+
   /** 판을 끝내는 두 동작(새 대국·기권)은 확인 창으로 한 번 더 묻는다. */
   const [asking, setAsking] = useState<"new" | "resign" | null>(null);
 
@@ -688,7 +798,7 @@ export default function App() {
 
   /**
    * 탭을 옮긴다. 기보 탭은 늘 목록의 첫 쪽(가장 최근 판)에서 시작한다. 복기가 도는
-   * 동안에는 엔진을 복기가 쥐고 있으므로 옮기지 않는다.
+   * 동안에는 엔진을 복기가 쥐고 있으므로 옮기지 않는다. 연습 판은 끝난다.
    */
   const goMode = useCallback(
     (next: ScreenId) => {
@@ -699,13 +809,19 @@ export default function App() {
       // 탭을 옮기면 판이 통째로 바뀐다. 남아 있던 '날아가는 수' 가 새 판에서 같은 국면
       // 번호를 만나 엉뚱하게 날지 않도록 지운다.
       setFly(null);
+      // 연습 판의 장군 기억(국면 번호마다)이 대국 탭의 판 번호와 섞이지 않게 같이 버린다.
+      if (practiceState.practice) {
+        practiceState.stop();
+        callouts.forget();
+      }
     },
-    [review.running, archive]
+    [review.running, archive, practiceState, callouts]
   );
 
   /** 기기에 있는 판을 연다. 목록 쪽 일은 훅이 하고, 판 바깥의 뒷정리만 여기 남는다. */
   const 기기에서열기 = (id: string) => {
     if (!archive.open(id)) return;
+    stopPractice();
     setMode("games");
     setSelected(null);
     setFly(null);
@@ -803,8 +919,21 @@ export default function App() {
     () => reviewed?.find((r) => r.index === cursor) ?? null,
     [reviewed, cursor]
   );
-  /** 복기한 판에서, 고른 수 대신 뒀어야 할 수 */
-  const bestArrow = openGame ? bestArrowOf(currentReview) : null;
+  /**
+   * 판의 파란 화살표 - AI 가 고른 수. 복기한 판에서는 고른 수 대신 뒀어야 할 수, 대국 중과
+   * 연습 판에서는 힌트. 둘이 한 판에 같이 서는 일은 없다(힌트는 지난 판을 볼 때 없다).
+   */
+  const bestArrow = openGame && !practice ? bestArrowOf(currentReview) : arrowOf(hint.move);
+
+  /** 대국 칸(연습 중이면 연습 칸) 제목 줄의 힌트 한 줄. 한수쉼은 화살표로 그릴 수 없어 이 줄만 말한다. */
+  const hintNote = hint.searching
+    ? "힌트를 찾는 중…"
+    : hint.move
+      ? `AI의 수 ${describeMove(hint.move, position.board).short}`
+      : hint.failed
+        ? "힌트를 찾지 못했습니다."
+        : null;
+
   const lastMove = useMemo(() => arrowOf(entry.move), [entry.move]);
 
   /** 장군을 맞은 궁의 자리. 판에서 붉게 테를 두른다. */
@@ -843,7 +972,8 @@ export default function App() {
       const timed = mode === "play" && clockSettings.enabled;
       return {
         side,
-        name: me === side ? "나" : openGame ? openGame.levelName : level.name,
+        // 연습 판은 실제로 두는 급수다. 불러온 기보의 이름(파일에 적힌 것)과 다를 수 있다.
+        name: me === side ? "나" : practice ? engineLevel.name : openGame ? openGame.levelName : level.name,
         kind: (me === side ? "human" : "engine") as "human" | "engine",
         score: side === "cho" ? scores.cho : scores.han,
         // 이 진영이 잡아낸 기물 = 상대가 잃은 기물
@@ -857,8 +987,8 @@ export default function App() {
       };
     },
     [
-      openGame, mySide, level.name, scores, position, showOver, engineTurn, mode,
-      clockSettings, clocks, gstatus, shownOutcome, narrow,
+      openGame, practice, engineLevel.name, mySide, level.name, scores, position, showOver,
+      engineTurn, mode, clockSettings, clocks, gstatus, shownOutcome, narrow,
     ]
   );
 
@@ -882,9 +1012,17 @@ export default function App() {
 
   const thinking = engineTurn && Boolean(snapshot?.running);
 
-  /* 연 판의 머리 한 줄(목록으로·어떤 판인지·저장). 폰에서는 판 위로 올라간다. */
+  /* 연 판의 머리 한 줄(목록으로·어떤 판인지·저장). 폰에서는 판 위로 올라간다. 목록으로 가면 연습도 끝난다. */
   const gameBar = openGame && (
-    <GameBar game={openGame} busy={review.running} onClose={archive.close} onSave={archive.save} />
+    <GameBar
+      game={openGame}
+      busy={review.running}
+      onClose={() => {
+        stopPractice();
+        archive.close();
+      }}
+      onSave={archive.save}
+    />
   );
 
   return (
@@ -964,7 +1102,7 @@ export default function App() {
                   canPick={touch.canPick}
                   // 지금 보고 있는 국면이 방금 난 그 국면일 때만 난다. 두 탭 모두에서.
                   flyMove={fly && fly.ply === cursor ? fly : null}
-                  callout={mode === "play" ? callouts.callout : null}
+                  callout={mode === "play" || practicing ? callouts.callout : null}
                 />
               </div>
 
@@ -983,16 +1121,23 @@ export default function App() {
               </div>
             )}
 
+            {/*
+              연습 판은 대국 탭과 같은 조작 줄이다(무르기·다시, 한수쉼, 힌트, 수 슬라이더 없음).
+              끝나도 '이전·다음' 으로 바꾸지 않는다 - 연습이라 무르고 다른 수를 둬 보는 것이 쓸모다.
+            */}
             <BoardControls
-              mode={mode === "games" ? "games" : "play"}
+              mode={mode === "games" && !practice ? "games" : "play"}
               cursor={cursor}
+              first={first}
               last={history.length - 1}
               canPass={canTouchBoard && touch.passSquare !== null}
+              canHint={canHint}
               finished={mode === "play" && ended}
               onJump={goTo}
               onUndo={undoMove}
               onFlip={flip}
               onPass={touch.pass}
+              onHint={hint.ask}
             />
 
             {mode === "play" && (
@@ -1006,6 +1151,7 @@ export default function App() {
                 variant={prefs.variant}
                 onVariant={(v) => setPrefs((o) => ({ ...o, variant: v }))}
                 thinking={thinking}
+                hintNote={hintNote}
                 onMySide={(s) => {
                   setMySide(s);
                   // 고른 쪽을 아래에 놓는다. 앉은 자리에서 보는 것이 기본이고,
@@ -1026,9 +1172,9 @@ export default function App() {
             {/*
               형세가 위, 복기가 아래 - 지금 국면의 형세를 보고 그 수의 설명으로 들어간다.
               형세는 복기 전에는 그릴 것이 없어 뜨지 않는다. 수를 옮기는 것은 판 조작 줄이
-              (이전·다음과 수 슬라이더로) 맡는다.
+              (이전·다음과 수 슬라이더로) 맡는다. 연습 판을 두는 동안에는 둘 자리에 연습 칸이 선다.
             */}
-            {openGame && (
+            {openGame && !practice && (
               <>
                 <EvalGraph history={history} cursor={cursor} />
                 <ReviewPanel
@@ -1044,8 +1190,21 @@ export default function App() {
                   error={review.error}
                   onStart={() => void startReview()}
                   onStop={review.stop}
+                  canPractice={canPracticeFrom(currentReview, openGame.mySide)}
+                  onPractice={startPractice}
                 />
               </>
+            )}
+            {practice && (
+              <PracticePanel
+                retry={practice.retry}
+                levelName={engineLevel.name}
+                thinking={thinking}
+                hintNote={hintNote}
+                outcome={practiceOutcome}
+                onRestart={restartPractice}
+                onBack={stopPractice}
+              />
             )}
           </section>
         </main>

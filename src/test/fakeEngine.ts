@@ -64,6 +64,8 @@ export class FakeEngine {
   searches: string[] = [];
   /** 탐색을 끝내고 내놓은 수, 내놓은 차례대로. */
   answers: string[] = [];
+  /** 한 국면 탐색(analyzeOnce, 복기·힌트가 쓴다)을 받은 차례대로. 그때의 실력 손잡이와 탐색량까지. */
+  onceCalls: { key: string; skill: number; limits: SearchLimits; answer: string | null }[] = [];
 
   private options: EngineOptions = { threads: 1, hashMb: 16, multiPV: 1, skill: 20, variant: "janggi" };
   private gen = 0;
@@ -80,6 +82,7 @@ export class FakeEngine {
     this.heldOnce = [];
     this.searches = [];
     this.answers = [];
+    this.onceCalls = [];
     this.held = [];
     this.gen++;
   }
@@ -150,8 +153,10 @@ export class FakeEngine {
     }, this.searchMs);
   }
 
-  async analyzeOnce(ref: PositionRef, _limits: SearchLimits): Promise<AnalysisSnapshot> {
-    const answer = snapshotOf(bestMove(positionOf(ref)));
+  async analyzeOnce(ref: PositionRef, limits: SearchLimits): Promise<AnalysisSnapshot> {
+    const move = bestMove(positionOf(ref));
+    this.onceCalls.push({ key: positionKey(ref), skill: this.options.skill, limits, answer: move });
+    const answer = snapshotOf(move);
     if (!this.holdOnce) return answer;
     return new Promise((resolve) => this.heldOnce.push(() => resolve(answer)));
   }

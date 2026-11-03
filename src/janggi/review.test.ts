@@ -9,7 +9,8 @@ import { START_FEN, parseFen } from "./board";
 import type { Board } from "./board";
 import type { ReviewInput, ReviewedMove } from "./review";
 import {
-  accuracyOf, clampScore, gradeOf, pickDeepMoves, reviewMove, bestArrowOf, winChance, winPercent,
+  accuracyOf, clampScore, gradeOf, pickDeepMoves, reviewMove, bestArrowOf, canPracticeFrom, winChance,
+  winPercent,
 } from "./review";
 
 const before: Board = parseFen(START_FEN).board;
@@ -206,6 +207,31 @@ describe("복기 화살표", () => {
   it("보통 수는 출발과 도착을 준다", () => {
     const r = { best: "a4a5" } as ReviewedMove;
     expect(bestArrowOf(r)).toEqual({ from: "a4", to: "a5" });
+  });
+});
+
+describe("그 수 전부터 다시 둘 수 있는 자리", () => {
+  // 내가 둔 큰 실수에서만 연습을 연다. 아쉬운 수까지 열면 단추가 거의 매 수 서고,
+  // 상대(AI)의 수에서 열면 내 실수를 다시 두는 것이 아니다.
+  const 큰실수 = reviewMove(수({ mover: "cho", scoreBefore: 0, scoreAfter: -8 }));
+  const 아쉬운수 = reviewMove(수({ mover: "cho", scoreBefore: 0, scoreAfter: -1.5 }));
+
+  it("내가 둔 큰 실수면 된다", () => {
+    expect(큰실수.grade).toBe("blunder");
+    expect(canPracticeFrom(큰실수, "cho")).toBe(true);
+  });
+
+  it("상대가 둔 큰 실수는 안 된다", () => {
+    expect(canPracticeFrom(큰실수, "han")).toBe(false);
+  });
+
+  it("아쉬운 수는 안 된다", () => {
+    expect(아쉬운수.grade).toBe("inaccuracy");
+    expect(canPracticeFrom(아쉬운수, "cho")).toBe(false);
+  });
+
+  it("복기가 없는 수(시작 국면)는 안 된다", () => {
+    expect(canPracticeFrom(null, "cho")).toBe(false);
   });
 });
 
