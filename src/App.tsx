@@ -689,13 +689,17 @@ export default function App() {
     : mode === "play" && !ended && !engineTurn;
 
   /**
-   * 힌트를 찾을 수 있는지. 둘 수 있는 국면이어야 하고, 찾는 중이거나 이미 찾았으면 잠근다.
+   * 힌트를 찾을 수 있는지. 둘 수 있는 국면이고 내 차례여야 하며, 찾는 중이거나 이미 찾았으면 잠근다.
+   *
+   * 내 차례는 따로 본다. canTouchBoard 는 기보 끝의 엔진 차례만 막아서, 무르고 [다시]로 간 국면은
+   * 엔진 쪽 차례여도 참이다. 그 국면에서 찾으면 상대 기물의 수를 'AI의 수' 로 보인다.
    *
    * 그 국면의 합법수를 받기 전에도 잠근다. 엔진은 일을 줄 세워 하는데, 엔진이 둔 직후에는
    * 설정을 내 차례 것(실력 20)으로 바꾸는 일이 합법수 묻기보다 먼저 줄에 선다. 합법수가 왔으면
    * 설정도 바뀌어 있다 - 그 전에 누르면 힌트가 상대 급수의 세기로 찾아질 수 있다.
    */
-  const canHint = canTouchBoard && probed && !hint.searching && hint.move === null;
+  const canHint =
+    canTouchBoard && position.turn !== engineSide && probed && !hint.searching && hint.move === null;
 
   /** 집고·끌고·한수쉼. 엔진이 알려 준 합법수를 '이 기물은 어디로 가나' 로 바꾼다. */
   const touch = useBoardTouch({
