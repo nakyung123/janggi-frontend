@@ -180,8 +180,11 @@ describe("정답 보기와 처음부터", () => {
 
   it("처음부터 - 문제 국면으로 돌아가고 정답 본 것도 지운다. 다시 풀면 푼 문제로 알린다", () => {
     const { hook, now, onSolve } = 띄운다(한수);
+    expect(now().atStart).toBe(true);
     act(() => now().showAnswer());
+    expect(now().atStart).toBe(false);
     act(() => now().restart());
+    expect(now().atStart).toBe(true);
     expect(now().peeked).toBe(false);
     expect(now().answerArrow).toBeNull();
     expect(now().note).toEqual({ kind: "start" });

@@ -54,6 +54,8 @@ export interface MateSolve {
   note: MateNote;
   /** 이번 판(처음부터 누른 뒤로)에 정답을 봤는지. 봤으면 끝까지 둬도 푼 문제로 남지 않는다. */
   peeked: boolean;
+  /** 문제 처음 그대로다(둔 수도, 본 정답도 없다). 처음부터가 할 일이 없다. */
+  atStart: boolean;
   /** 정답 보기 화살표. 공격 차례에만, 누른 그 수에만 선다. */
   answerArrow: { from: Square; to: Square } | null;
   lastMove: { from: Square; to: Square } | null;
@@ -152,6 +154,7 @@ export function useMateSolve(puzzle: MatePuzzle, onSolve: (id: string) => void):
     phase,
     note,
     peeked,
+    atStart: plies === 0 && !peeked,
     answerArrow: showing && phase === "attack" ? arrowOf(puzzle.line[plies]) : null,
     lastMove: last,
     flyMove: fly,
