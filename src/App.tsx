@@ -99,6 +99,12 @@ import type { ScreenId } from "./screens";
 /** 메뉴 두 곳(폰 ☰ · 왼쪽 메뉴)이 그리는 목록. */
 const MENU = menuOf(SCREENS);
 
+/** 새 대국 확인 창이 묻는 것. 무엇이 달라지는지 한 줄과, 확인하면 두던 판이 기권패로 남는지. */
+interface NewGameAsk {
+  message: string;
+  resign: boolean;
+}
+
 export default function App() {
   const { engine, status, progress, error } = useEngine();
   const [mode, setMode] = useState<ScreenId>("play");
@@ -740,9 +746,21 @@ export default function App() {
 
   /**
    * 새 대국을 누르면 두던 판이 기권패로 남는지. 끝나지 않았고 기보가 기준 수 이상이면 남는다
-   * (archive.ts 의 RESIGN_ON_ABANDON_PLIES). 확인 창의 글과 새 대국이 같이 본다.
+   * (archive.ts 의 RESIGN_ON_ABANDON_PLIES).
    */
   const abandonIsResign = !ended && playHistory.length - 1 >= RESIGN_ON_ABANDON_PLIES;
+
+  /** 새 대국 확인 창에 적을 한 줄과, 확인하면 두던 판이 기권패로 남는지. 지금 판으로 센다. */
+  const newGameAsk = (): NewGameAsk => ({
+    resign: abandonIsResign,
+    message: !started
+      ? "판을 처음 모양으로 다시 놓습니다."
+      : ended
+        ? "끝난 판은 기보 목록에서 다시 볼 수 있습니다."
+        : abandonIsResign
+          ? "두던 판은 기권패로 기보 목록에 남습니다."
+          : "두던 판은 사라집니다. 기보 목록에는 끝난 판만 남습니다.",
+  });
 
   /**
    * 새 대국. 시작 국면(상차림 포함)은 그대로 두고 수만 지운다.
@@ -752,14 +770,14 @@ export default function App() {
    * 판이 섞여 서면 끝난 판을 골라내기가 오히려 어렵다. 파일에서 불러온 끝나지 않은 기보는
    * 그대로 '중단' 으로 든다 - 그건 사람이 일부러 가져온 것이다.
    *
-   * **오래 둔 판은 기권패로 남긴다**(abandonIsResign). 지는 판을 버리면 전적에서 빠져 점수가
-   * 높게 나온다. 기권 단추와 같은 모양으로 넣고, 로그인했으면 다른 판처럼 서버에 올라간다.
-   * 결과 창은 띄우지 않고 game_end 도 보내지 않는다 - 사람은 방금 확인 창에서 골랐고,
-   * game_end 는 '판이 끝나 결과 창이 뜬 판' 만 세어 왔다. 여기서 보내면 쌓인 기록과 뜻이
-   * 달라진다. 어느 쪽이든 새 대국을 묻는 창이 미리 말한다.
+   * **오래 둔 판은 기권패로 남긴다**(resign, 확인 창이 정해 넘긴다). 지는 판을 버리면 전적에서
+   * 빠져 점수가 높게 나온다. 기권 단추와 같은 모양으로 넣고, 로그인했으면 다른 판처럼 서버에
+   * 올라간다. 결과 창은 띄우지 않고 game_end 도 보내지 않는다 - 사람은 방금 확인 창에서
+   * 골랐고, game_end 는 '판이 끝나 결과 창이 뜬 판' 만 세어 왔다. 여기서 보내면 쌓인 기록과
+   * 뜻이 달라진다. 어느 쪽이든 새 대국을 묻는 창이 미리 말한다.
    */
-  const newGame = () => {
-    if (abandonIsResign) {
+  const newGame = (resign: boolean) => {
+    if (resign) {
       const winner: Side = mySide === "cho" ? "han" : "cho";
       setGames((list) => upsertGame(list, archiveOf({ kind: "resign", winner })));
     }
@@ -812,8 +830,18 @@ export default function App() {
     forgetMoves();
   };
 
-  /** 판을 끝내는 두 동작(새 대국·기권)은 확인 창으로 한 번 더 묻는다. */
-  const [asking, setAsking] = useState<"new" | "resign" | null>(null);
+  /**
+   * 판을 끝내는 두 동작(새 대국·기권)은 확인 창으로 한 번 더 묻는다.
+   *
+   * 새 대국 창은 연 때의 글과 판단(newGameAsk)을 쥐고 그대로 보인다. 창이 열린 동안에도 엔진은
+   * 두므로, 9수째에 "사라집니다" 로 연 창이 엔진의 열째 수로 기권패가 될 수 있다. 확인을 누른
+   * 때 다시 세어 기권패로 남는지가 창에 적힌 것과 다르면, 판을 넘기지 않고 바뀐 글로 다시
+   * 묻는다(changed). 창이 열린 동안 판이 끝난 때(엔진의 외통 등)도 같다 - 끝난 판의 결과를
+   * 기권패로 덮지 않는다.
+   */
+  const [asking, setAsking] = useState<
+    ({ kind: "new"; changed: boolean } & NewGameAsk) | { kind: "resign" } | null
+  >(null);
 
   /** 메뉴의 '업데이트 내역' 으로 여는 창. 두던 판은 그대로 있다. */
   const [updatesOpen, setUpdatesOpen] = useState(false);
@@ -1194,8 +1222,8 @@ export default function App() {
                 onSetup={(side: Side, setup: Setup) =>
                   startFrom({ ...position, board: applySetup(position.board, side, setup) })
                 }
-                onNewGame={() => setAsking("new")}
-                onResign={() => setAsking("resign")}
+                onNewGame={() => setAsking({ kind: "new", changed: false, ...newGameAsk() })}
+                onResign={() => setAsking({ kind: "resign" })}
               />
             )}
 
@@ -1275,30 +1303,32 @@ export default function App() {
       )}
       {noticeOpen && <NoticeDialog onClose={() => setNoticeOpen(false)} />}
 
-      {/* 새 대국은 언제 눌러도 묻는다. 무엇이 달라지는지 한 줄만 상황마다 다르게 적는다. */}
-      {asking === "new" && (
+      {/*
+        새 대국은 언제 눌러도 묻는다. 무엇이 달라지는지 한 줄만 상황마다 다르게 적는다(asking 주석).
+        다시 물을 때는 창을 새로 띄워 초점을 '취소' 로 돌린다. 다시 묻는 것은 기권패로 남는지가
+        바뀐 때뿐이라 resign 이 열쇠가 된다.
+      */}
+      {asking?.kind === "new" && (
         <ConfirmDialog
+          key={String(asking.resign)}
           title="새 대국을 시작할까요?"
-          message={
-            !started
-              ? "판을 처음 모양으로 다시 놓습니다."
-              : ended
-                ? "끝난 판은 기보 목록에서 다시 볼 수 있습니다."
-                : abandonIsResign
-                  ? "두던 판은 기권패로 기보 목록에 남습니다."
-                  : "두던 판은 사라집니다. 기보 목록에는 끝난 판만 남습니다."
-          }
+          message={(asking.changed ? "그사이 판이 바뀌었습니다. " : "") + asking.message}
           confirmLabel="새 대국"
           // 기권패로 남는 것만 되돌릴 수 없다. 기권 확인과 같은 붉은 단추다.
-          danger={abandonIsResign}
+          danger={asking.resign}
           onConfirm={() => {
+            const now = newGameAsk();
+            if (now.resign !== asking.resign) {
+              setAsking({ kind: "new", changed: true, ...now });
+              return;
+            }
             setAsking(null);
-            newGame();
+            newGame(now.resign);
           }}
           onCancel={() => setAsking(null)}
         />
       )}
-      {asking === "resign" && (
+      {asking?.kind === "resign" && (
         <ConfirmDialog
           title="기권할까요?"
           message="이 판은 기권패로 끝납니다."

@@ -630,11 +630,15 @@ describe("오래 둔 판을 새 대국으로 버리면 기권패로 남는다", 
   const 패널 = () => document.querySelector(".panel.play") as HTMLElement;
   const 기보 = () => JSON.parse(localStorage.getItem("janggi:games") ?? "[]") as ArchivedGame[];
 
-  /** 두던 판을 plies 수까지 둔 모양으로 넣는다. 양쪽 졸·병을 차례로 한 칸씩 앞으로. */
+  /**
+   * 두던 판을 plies 수까지 둔 모양으로 넣는다. 양쪽 졸·병을 차례로 한 칸씩 앞으로, 열한째
+   * 수는 초의 졸을 옆으로.
+   */
   function 두던판(plies: number, id: string) {
     const 수: [Square, Square][] = [
       ["a4", "a5"], ["a7", "a6"], ["c4", "c5"], ["c7", "c6"], ["e4", "e5"],
       ["e7", "e6"], ["g4", "g5"], ["g7", "g6"], ["i4", "i5"], ["i7", "i6"],
+      ["a5", "b5"],
     ];
     let history: HistoryEntry[] = startHistory(START_FEN);
     for (const [from, to] of 수.slice(0, plies)) {
@@ -643,9 +647,12 @@ describe("오래 둔 판을 새 대국으로 버리면 기권패로 남는다", 
     writeStored("game", { id, history, cursor: plies, resigned: null, flagged: null });
   }
 
+  const 확인창 = () => screen.getByRole("alertdialog");
+  const 확인단추 = () => within(확인창()).getByRole("button", { name: "새 대국" });
+
   function 새대국() {
     fireEvent.click(within(패널()).getByRole("button", { name: "새 대국" }));
-    return screen.getByRole("alertdialog");
+    return 확인창();
   }
 
   it("10수를 둔 판은 확인 창이 미리 말하고, 확인하면 기권패(엔진 쪽 승)로 남는다", async () => {
@@ -684,6 +691,66 @@ describe("오래 둔 판을 새 대국으로 버리면 기권패로 남는다", 
     await waitFor(() => expect(piece("a7")).not.toBeNull());
     await new Promise((r) => setTimeout(r, 100));
     expect(기보()).toHaveLength(0);
+  });
+
+  /*
+   * 확인 창이 열린 동안에도 엔진은 둔다. 창을 연 때와 누른 때의 판단이 다르면 판을 넘기지
+   * 않고 바뀐 글로 다시 묻는다(App 의 asking 주석). 초를 잡으면 홀수 수 뒤가 엔진 차례다.
+   */
+  it("9수에서 연 창이 열린 동안 엔진이 열째 수를 두면, 확인해도 넘기지 않고 기권패로 다시 묻는다", async () => {
+    engine().searchMs = 500; // 엔진이 늦게 둔다. 그사이 창을 연다
+    두던판(9, "아홉수");
+    render(<App />);
+    await waitFor(() => expect(engine().searches.length).toBeGreaterThan(0));
+
+    const 창 = 새대국();
+    expect(창.textContent).toContain("두던 판은 사라집니다.");
+    expect(확인단추().className).not.toContain("danger");
+    await engineReply(1);
+    // 창의 글은 연 때 그대로다. 사람이 읽은 글과 누르는 단추의 뜻이 같아야 한다.
+    expect(확인창().textContent).toContain("두던 판은 사라집니다.");
+
+    // 사람이 누를 때처럼 초점을 단추에 둔다(fireEvent.click 은 초점을 옮기지 않는다).
+    확인단추().focus();
+    fireEvent.click(확인단추());
+    expect(확인창().textContent).toContain(
+      "그사이 판이 바뀌었습니다. 두던 판은 기권패로 기보 목록에 남습니다."
+    );
+    expect(확인단추().className).toContain("danger");
+    // 새로 띄운 창이라 초점이 '취소' 에 있다. 이어 누른 엔터로 기권패가 들지 않는다.
+    expect(document.activeElement).toBe(within(확인창()).getByRole("button", { name: "취소" }));
+    expect(기보()).toHaveLength(0);
+
+    fireEvent.click(확인단추());
+    await waitFor(() => expect(기보()).toHaveLength(1));
+    const [판] = 기보();
+    expect(판.result).toEqual({ kind: "resign", winner: "han" });
+    expect(판.history).toHaveLength(11);
+  });
+
+  it("기권패로 남는다고 연 창이 열린 동안 판이 끝나면, 확인해도 끝난 판의 결과를 덮지 않는다", async () => {
+    // 11수 뒤는 엔진(한) 차례. 엔진의 열두째 수 뒤 국면을 초의 외통으로 꾸민다(장군, 한수쉼뿐).
+    engine().searchMs = 500;
+    engine().probeAnswer = (ref) =>
+      ref.moves.length === 12 ? { checkers: ["e3"], legal: ["e2e2"] } : null;
+    두던판(11, "끝날-판");
+    render(<App />);
+    await waitFor(() => expect(engine().searches.length).toBeGreaterThan(0));
+
+    expect(새대국().textContent).toContain("두던 판은 기권패로 기보 목록에 남습니다.");
+    await engineReply(1);
+    await waitFor(() => expect(기보()).toHaveLength(1));
+    const [끝난판] = 기보();
+    expect(끝난판.result).toEqual({ kind: "checkmate", winner: "han" });
+
+    fireEvent.click(확인단추());
+    expect(확인창().textContent).toContain(
+      "그사이 판이 바뀌었습니다. 끝난 판은 기보 목록에서 다시 볼 수 있습니다."
+    );
+    fireEvent.click(확인단추());
+
+    await waitFor(() => expect(piece("a4")).not.toBeNull());
+    expect(기보()).toEqual([끝난판]);
   });
 });
 
