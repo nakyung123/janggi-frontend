@@ -17,6 +17,7 @@ import { positionKey } from "./engine/types";
 import { START_FEN, parseFen } from "./janggi/board";
 import { nextEntry, startHistory } from "./janggi/history";
 import { describeMove, splitMove } from "./janggi/notation";
+import { sideOf } from "./janggi/pieces";
 import { reviewMove } from "./janggi/review";
 import { FakeEngine } from "./test/fakeEngine";
 
@@ -270,11 +271,17 @@ describe("힌트", () => {
 
 describe("실수한 곳부터 다시", () => {
   /*
-   * 복기를 마친 판 하나. 내가 초를 잡았고, 셋째 수(나의 e4e5)가 큰 실수다. 기보 목록은 등급을
-   * 승률 하락에서 다시 매기므로(archive.ts 의 regrade) 점수로 정한다.
+   * 복기를 마친 판 하나. 내가 잡은 쪽(기본은 초)의 둘째 수가 큰 실수다 - 초면 셋째 수 e4e5,
+   * 한이면 넷째 수 e7e6. 기보 목록은 등급을 승률 하락에서 다시 매기므로(archive.ts 의 regrade)
+   * 점수로 정한다. 점수는 초 기준이라 한의 큰 실수는 점수가 오른다.
    */
   const 수순 = ["c4c5", "c7c6", "e4e5", "e7e6"];
-  function 복기한판() {
+  const 큰실수 = {
+    cho: { played: "e4e5", best: "a4a5", scoreAfter: -8 },
+    han: { played: "e7e6", best: "a7a6", scoreAfter: 8 },
+  } as const;
+  function 복기한판(mySide: keyof typeof 큰실수 = "cho") {
+    const 실수 = 큰실수[mySide];
     const history = startHistory(START_FEN);
     for (const m of 수순) {
       const { from, to } = splitMove(m);
@@ -287,21 +294,21 @@ describe("실수한 곳부터 다시", () => {
         before: parseFen(history[i].fen).board,
         after: parseFen(history[i + 1].fen).board,
         played: m,
-        best: m === "e4e5" ? "a4a5" : m,
+        best: m === 실수.played ? 실수.best : m,
         replyPv: [],
         scoreBefore: 0,
-        scoreAfter: m === "e4e5" ? -8 : 0,
+        scoreAfter: m === 실수.played ? 실수.scoreAfter : 0,
         bestGivesCheck: false,
       })
     );
     return {
       id: "reviewed-1",
       endedAt: Date.now() - 60_000,
-      mySide: "cho",
+      mySide,
       levelId: "k12",
       levelName: "12급",
       variant: "janggi",
-      result: { kind: "resign", winner: "han" },
+      result: { kind: "resign", winner: mySide === "cho" ? "han" : "cho" },
       history,
       reviewed,
     };
@@ -313,8 +320,8 @@ describe("실수한 곳부터 다시", () => {
   const 저장된판들 = () => JSON.parse(localStorage.getItem("janggi:games") ?? "[]") as { id: string }[];
 
   /** 대국 탭에서 한 수 두고(두던 판), 기보 탭에서 복기한 판을 연다. 판은 마지막 수(한의 수)에 선다. */
-  async function 복기한판을연다() {
-    localStorage.setItem("janggi:games", JSON.stringify([복기한판()]));
+  async function 복기한판을연다(mySide: keyof typeof 큰실수 = "cho") {
+    localStorage.setItem("janggi:games", JSON.stringify([복기한판(mySide)]));
     await start();
     drag("c4", "c5");
     await engineReply(1);
@@ -389,6 +396,27 @@ describe("실수한 곳부터 다시", () => {
     await waitFor(() => expect(piece("a5")).not.toBeNull());
     await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
     expect(hintButton().disabled).toBe(true);
+  });
+
+  it("한을 잡은 판은 대국 탭이 초여도 한으로 두고, 엔진은 초의 수만 둔다", async () => {
+    // 연습 판의 쪽은 그 판에서 잡은 쪽이다. 대국 탭의 쪽을 따르면 엔진이 내 쪽(한)의 수를 둔다.
+    await 복기한판을연다("han");
+    // 마지막 수(한의 e7e6)가 큰 실수라 되짚지 않고 연다.
+    fireEvent.click(다시두기()!);
+    await waitFor(() => expect(연습칸()).not.toBeNull());
+    expect(연습칸()!.textContent).toContain("한의 2번째 수");
+
+    // 시작 국면은 한(나)의 차례다. 엔진은 두지 않고, 내가 기물을 집는다.
+    await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
+    expect(engine().answers, "대국 탭에서 받은 한 수뿐").toHaveLength(1);
+
+    drag("a7", "a6");
+    const reply = await engineReply(2);
+    const 받기전 = ["c4c5", "c7c6", "e4e5", "a7a6"].reduce((fen, m) => {
+      const { from, to } = splitMove(m);
+      return nextEntry(fen, from, to).fen;
+    }, START_FEN);
+    expect(sideOf(parseFen(받기전).board[splitMove(reply).from]!)).toBe("cho");
   });
 
   it("연습 판은 끝나도 기보 목록에 들지 않고 결과 창도 뜨지 않는다", async () => {
