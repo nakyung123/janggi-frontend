@@ -32,7 +32,10 @@ export type StatsView =
       full: boolean;
       /** 서버가 한 사람에게 받아 두는 판 수(SERVER_GAME_LIMIT). 화면이 server/ 를 모르게 여기서 준다 */
       limit: number;
-      /** 기보를 서버에 올리지 못한 까닭. 그 판은 점수에서 빠진다 */
+      /**
+       * 서버 일이 마지막으로 어긋난 까닭(ServerGames.error). 기보 올리기만이 아니라 서버의 판
+       * 받기·로그아웃·탈퇴 실패도 든다. 올리기 실패면 그 판은 점수에서 빠진다
+       */
       syncError: string | null;
     };
 
