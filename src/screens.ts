@@ -7,6 +7,9 @@
 // 메뉴 두 곳에 저절로 뜨고, 누르면 App 이 그 컴포넌트를 헤더 아래에 세운다. 대국과 기보는
 // 엔진·두던 판·복기를 쥔 App 이 직접 그리므로 Component 가 없다.
 //
+// 컴포넌트는 App 이 쥔 기보 목록과 로그인·서버 상태를 props(ScreenProps)로 받는다. 쓰지 않는
+// 화면은 받지 않는 것처럼 두면 된다(배우기 화면).
+//
 // 만든 화면만 넣는다. 빈 화면이나 "준비 중" 을 띄우지 않는다. 항목이 없는 묶음은 메뉴에
 // 뜨지 않는다.
 
@@ -15,6 +18,9 @@ import { CoordsScreen } from "./components/learn/CoordsScreen";
 import { PiecesScreen } from "./components/learn/PiecesScreen";
 import { RulesScreen } from "./components/learn/RulesScreen";
 import { TermsScreen } from "./components/learn/TermsScreen";
+import { StatsScreen } from "./components/record/StatsScreen";
+import type { ServerGames } from "./hooks/useServerGames";
+import type { ArchivedGame } from "./janggi/archive";
 
 /** 메뉴의 묶음. 이 순서로 선다. */
 export const GROUPS = [
@@ -30,9 +36,18 @@ export type GroupId = (typeof GROUPS)[number]["id"];
 /** 판을 띄우는 두 화면. App 이 직접 그린다. */
 export type BoardMode = "play" | "games";
 
+/**
+ * 메뉴 화면이 App 에게서 받는 것. 이 기기의 기보 목록과 로그인·서버 상태는 App 이 하나씩만
+ * 쥔다 - 화면이 따로 만들면 같은 판을 두 번 올리거나 목록이 둘로 갈라진다.
+ */
+export interface ScreenProps {
+  games: ArchivedGame[];
+  server: ServerGames;
+}
+
 export type Screen =
   | { id: BoardMode; group: GroupId; label: string }
-  | { id: string; group: GroupId; label: string; Component: ComponentType };
+  | { id: string; group: GroupId; label: string; Component: ComponentType<ScreenProps> };
 
 const list = [
   { id: "play", group: "play", label: "대국" },
@@ -41,6 +56,7 @@ const list = [
   { id: "terms", group: "learn", label: "용어", Component: TermsScreen },
   { id: "coords", group: "learn", label: "좌표", Component: CoordsScreen },
   { id: "games", group: "record", label: "기보" },
+  { id: "stats", group: "record", label: "내 전적", Component: StatsScreen },
 ] as const satisfies readonly Screen[];
 
 export const SCREENS: readonly Screen[] = list;

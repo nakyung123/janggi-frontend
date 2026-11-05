@@ -8,9 +8,11 @@
 //
 // Given 빈 DB, 가짜 구글
 // When  A 로 로그인한다                     Then 로그아웃이 선다(로그인됨)
-// When  한 판 두고 기권한다                 Then 목록에 그 판이 있고 "이 기기에만 있음" 이 없다
-// When  다른 기기에서 A 로 로그인한다       Then 같은 판이 "다른 기기에서 둔 판" 으로, 같은 수 개수로 보인다
-// When  또 다른 기기에서 B 로 로그인한다    Then A 의 판이 보이지 않는다
+// When  한 판 두고 기권한다                 Then 목록에 그 판이 있고 "이 기기에만 있음" 이 없다.
+//                                                내 전적에 그 판으로 센 점수(1296)가 선다
+// When  다른 기기에서 A 로 로그인한다       Then 내 전적이 같은 점수다. 같은 판이 "다른 기기에서
+//                                                둔 판" 으로, 같은 수 개수로 보인다
+// When  또 다른 기기에서 B 로 로그인한다    Then A 의 판이 보이지 않고, 내 전적은 0판이다
 // When  A 가 탈퇴한다                       Then 그 기기는 로그아웃되고 이미 받은 판은 남는다.
 //                                                첫 기기를 다시 열면 그쪽 로그인도 풀려 있다
 //
@@ -28,6 +30,20 @@ async function signIn(request: APIRequestContext, app: AppPage, sub: string) {
   await app.login.click();
   // 쪽이 구글을 거쳐 돌아오면 엔진을 다시 띄운다. 헤더는 엔진이 뜬 뒤에 선다.
   await expect(app.logout, "로그인되어 로그아웃이 선다").toBeVisible({ timeout: ENGINE_WAIT });
+}
+
+/**
+ * 내 전적을 열고 점수를 본다. A 는 12급(기본 상대)에게 처음 점수(316)로 한 판 졌다:
+ * 316 + 40 × (0 − 0.5) = 296, 화면은 1000 을 더해 1296(src/hooks/stats.ts). 서버에 있는 판으로만
+ * 세므로 어느 기기에서나 같은 숫자다.
+ */
+async function expectOneLoss(app: AppPage) {
+  await app.openScreen("내 전적");
+  await expect(app.page.getByText("1296", { exact: true }), "서버 목록으로 센 점수").toBeVisible();
+  await expect(app.page.getByText("12급과 비슷")).toBeVisible();
+  await expect(app.page.getByText("AI 와 둔 1판으로 셌습니다.")).toBeVisible();
+  await expect(app.page.getByRole("definition")).toHaveText("1판 · 0승 1패");
+  await app.noHorizontalScroll();
 }
 
 /** 새 기기. 저장소와 쿠키가 빈 브라우저 문맥에 같은 폭으로 연다. */
@@ -70,10 +86,17 @@ test("둔 판이 서버에 남고, 다른 기기에서 보이고, 남에게는 �
     expect(moves, "카드에 수 개수가 있다").not.toBe("");
   });
 
+  await test.step("내 전적에 그 판으로 센 점수가 선다", async () => {
+    // 로그인할 때 받은 서버 목록은 비어 있었다. 방금 올린 판은 '이번에 올린 판' 으로 센다.
+    await expectOneLoss(app);
+  });
+
   const second = await newDevice(browser);
 
-  await test.step("다른 기기에서 A 로 로그인하면 같은 판이 보인다", async () => {
+  await test.step("다른 기기에서 A 로 로그인하면 같은 점수, 같은 판이 보인다", async () => {
     await signIn(request, second, A);
+    // 이 기기에는 그 판이 없다. 서버 목록만으로 같은 점수가 나와야 한다.
+    await expectOneLoss(second);
     await second.openGamesTab();
     await expect(second.gameCards).toHaveCount(1);
     const card = second.gameCards.first();
@@ -85,12 +108,15 @@ test("둔 판이 서버에 남고, 다른 기기에서 보이고, 남에게는 �
     await second.backToList.click();
   });
 
-  await test.step("B 로 로그인하면 A 의 판이 보이지 않는다", async () => {
+  await test.step("B 로 로그인하면 A 의 판이 보이지 않고 내 전적은 0판이다", async () => {
     const third = await newDevice(browser);
     await signIn(request, third, B);
     await third.openGamesTab();
     await expect(third.emptyList).toBeVisible();
     await expect(third.gameCards).toHaveCount(0);
+    await third.openScreen("내 전적");
+    await expect(third.page.getByText("아직 점수에 센 판이 없습니다.")).toBeVisible();
+    await expect(third.page.getByText("1296", { exact: true })).toHaveCount(0);
     expect(third.errors, "B 기기의 스크립트 오류").toEqual([]);
   });
 

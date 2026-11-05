@@ -31,8 +31,10 @@ const VARIANT_OPTIONS: { id: Variant; label: string; desc: string }[] = [
 interface Props {
   mySide: Side;
   levelId: string;
-  /** 대국이 이미 시작됐는지 (수를 한 번이라도 뒀는지) */
+  /** 대국이 이미 시작됐는지 (판에 수가 하나라도 놓였는지. 엔진의 수도 센다) */
   started: boolean;
+  /** 내가 이 판에 한 수라도 뒀는지. 쪽·급수는 이때부터 잠긴다(App 의 moved 주석). */
+  moved: boolean;
   /**
    * 이 판이 끝났는지. 끝난 판은 새 대국을 눌러야 설정이 풀린다.
    * 지금 보고 있는 국면이 아니라 판 전체로 본다(App 의 ended 주석).
@@ -57,7 +59,7 @@ interface Props {
 
 export function PlayPanel(props: Props) {
   const {
-    mySide, levelId, started, ended, thinking, hintNote,
+    mySide, levelId, started, moved, ended, thinking, hintNote,
     clockId, onClock, variant, onVariant,
     onMySide, onLevel, setups, onSetup, onNewGame, onResign,
   } = props;
@@ -67,13 +69,16 @@ export function PlayPanel(props: Props) {
   const variantLabel = useId();
 
   /*
-   * 잠금은 두 겹이다.
+   * 잠금은 세 겹이다.
    *
-   * 규칙·상차림은 첫 수를 두면 잠긴다. 두던 중에 승부 조건이 바뀌면 안 된다.
-   * 나머지(쪽·급수·시계)는 두는 동안에는 풀어 두고, 판이 끝나면 잠근다. 끝난 판에서
-   * 시계를 바꾸면 양쪽 시계가 새로 차 시간패가 지워지고, 쪽을 바꾸면 기권한 쪽이
-   * 뒤바뀐다. 끝난 판은 새 대국으로만 넘어간다.
+   * 규칙·상차림은 판에 첫 수가 놓이면 잠긴다. 두던 중에 승부 조건이 바뀌면 안 된다.
+   * 쪽·급수는 내가 첫 수를 두면 잠긴다. 전적은 판이 끝난 순간의 급수·쪽으로 세므로, 두는
+   * 중에 바꾸면 다른 급수와 둔 판이 그 급수의 전적에 든다. 한을 잡으면 엔진이 먼저 두므로
+   * '판의 첫 수' 가 아니라 '내 첫 수' 다.
+   * 시계는 두는 동안에는 풀어 두고, 판이 끝나면 잠근다. 끝난 판에서 시계를 바꾸면 양쪽
+   * 시계가 새로 차 시간패가 지워진다. 끝난 판은 새 대국으로만 넘어간다.
    */
+  const sideLocked = ended || moved;
   return (
     <div className="panel play">
       <div className="panel-title">
@@ -103,7 +108,7 @@ export function PlayPanel(props: Props) {
               type="button"
               className={(mySide === id ? "active " : "") + id}
               aria-pressed={mySide === id}
-              disabled={ended}
+              disabled={sideLocked}
               onClick={() => onMySide(id)}
             >
               {label}
@@ -119,7 +124,7 @@ export function PlayPanel(props: Props) {
         <Dropdown
           value={level.id}
           labelledBy={levelLabel}
-          disabled={ended}
+          disabled={sideLocked}
           onChange={onLevel}
           options={LEVELS.map((l) => {
             const wait = levelWaitLabel(l);
@@ -171,7 +176,7 @@ export function PlayPanel(props: Props) {
         열여섯 자 남짓).
       */}
       <p className="muted small field-note">
-        {ended ? "새 대국을 누르면 설정이 풀립니다." : "규칙·상차림은 시작하면 잠깁니다."}
+        {sideLocked ? "잠긴 칸은 새 대국에서 풀립니다." : "시계 말고는 첫 수에 잠깁니다."}
       </p>
 
       {/*

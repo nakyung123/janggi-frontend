@@ -14,9 +14,15 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { positionKey } from "./engine/types";
+import { writeStored } from "./hooks/usePersisted";
+import type { ArchivedGame } from "./janggi/archive";
+import { RESIGN_ON_ABANDON_PLIES } from "./janggi/archive";
+import type { Square } from "./janggi/board";
 import { START_FEN, parseFen } from "./janggi/board";
+import type { HistoryEntry } from "./janggi/history";
 import { nextEntry, startHistory } from "./janggi/history";
 import { describeMove, splitMove } from "./janggi/notation";
+import type { Side } from "./janggi/pieces";
 import { sideOf } from "./janggi/pieces";
 import { reviewMove } from "./janggi/review";
 import { FakeEngine } from "./test/fakeEngine";
@@ -556,6 +562,234 @@ describe("판이 끝나면", () => {
     expect(기권버튼().disabled).toBe(true);
     // 끝난 판이라 기물을 집을 수 없다.
     expect(pickable()).toHaveLength(0);
+  });
+});
+
+/*
+ * 전적은 판이 끝난 순간의 급수·쪽으로 센다(hooks/stats.ts). 두는 중에 바꿀 수 있으면 다른
+ * 급수와 둔 판이 그 급수의 전적에 든다. 그래서 내가 첫 수를 두면 쪽·급수를 잠근다.
+ * '판의 첫 수' 가 아니다 - 한을 잡으면 엔진이 판이 놓이자마자 두므로, 그것으로 잠그면
+ * 한을 잡은 사람은 바꿀 틈이 없다.
+ */
+describe("쪽·급수는 내가 첫 수를 두면 잠긴다", () => {
+  const 패널 = () => document.querySelector(".panel.play") as HTMLElement;
+  const 쪽 = (name: "초" | "한") => within(패널()).getByRole("button", { name }) as HTMLButtonElement;
+  const 급수 = () => within(패널()).getByRole("combobox", { name: /상대 급수/ }) as HTMLButtonElement;
+  const 시계 = () => within(패널()).getByRole("button", { name: "시계 없음" }) as HTMLButtonElement;
+  const 확인창 = () => screen.getByRole("alertdialog");
+  const 칸 = (name: string) =>
+    within(screen.getByRole("grid", { name: "장기판" })).queryByRole("gridcell", { name });
+
+  it("첫 수를 두면 쪽·급수가 잠기고 시계는 열려 있다. 끝난 판에서 새 대국을 누르면 풀린다", async () => {
+    await start();
+    expect(쪽("한").disabled).toBe(false);
+    expect(급수().disabled).toBe(false);
+
+    drag("c4", "c5");
+    await engineReply(1);
+    expect(쪽("초").disabled).toBe(true);
+    expect(쪽("한").disabled).toBe(true);
+    expect(급수().disabled).toBe(true);
+    expect(시계().disabled).toBe(false);
+
+    // 기권으로 끝낸다. 끝난 판도 잠겨 있다.
+    fireEvent.click(within(패널()).getByRole("button", { name: "기권" }));
+    fireEvent.click(within(확인창()).getByRole("button", { name: "기권" }));
+    fireEvent.click(await screen.findByRole("button", { name: "닫기" }));
+    expect(쪽("한").disabled).toBe(true);
+    expect(급수().disabled).toBe(true);
+
+    fireEvent.click(within(패널()).getByRole("button", { name: "새 대국" }));
+    fireEvent.click(within(확인창()).getByRole("button", { name: "새 대국" }));
+    await waitFor(() => expect(쪽("한").disabled).toBe(false));
+    expect(급수().disabled).toBe(false);
+  });
+
+  it("한을 잡아 엔진이 먼저 둬도 내가 두기 전에는 열려 있고, 초로 바꾸면 판을 처음부터 놓는다(상차림은 그대로)", async () => {
+    await start();
+    // 기본(마상상마)이 아닌 상차림으로 놓는다. 다시 놓을 때 기본 판으로 돌아가면 이것이 풀린다.
+    const 초상차림 = within(패널().querySelector(".setup-row") as HTMLElement);
+    fireEvent.click(초상차림.getByRole("button", { name: "상마마상" }));
+    expect(칸("02 초 상")).not.toBeNull();
+
+    fireEvent.click(쪽("한"));
+    const enginesFirst = await engineReply(1);
+    const { from, to } = splitMove(enginesFirst);
+
+    expect(쪽("초").disabled).toBe(false);
+    expect(급수().disabled).toBe(false);
+
+    fireEvent.click(쪽("초"));
+    // 엔진이 둔 초의 첫 수가 내 수가 되지 않는다. 처음 국면이고 아무것도 잠기지 않았다.
+    await waitFor(() => expect(piece(from)).not.toBeNull());
+    expect(piece(to)).toBeNull();
+    expect(칸("02 초 상")).not.toBeNull();
+    expect(칸("03 초 마")).not.toBeNull();
+    expect(쪽("한").disabled).toBe(false);
+    expect(급수().disabled).toBe(false);
+    await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
+  });
+
+  it("내가 둔 뒤 처음까지 물러도 쪽·급수는 잠긴 채다", async () => {
+    // 되감은 수도 기보에 남아 있으면 센다. 무르기로 잠금을 푸는 길을 두지 않는다.
+    await start();
+    drag("c4", "c5");
+    await engineReply(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /무르기/ }));
+    await waitFor(() => expect(piece("c4")).not.toBeNull());
+    expect(piece("c5")).toBeNull();
+    expect(쪽("한").disabled).toBe(true);
+    expect(급수().disabled).toBe(true);
+  });
+});
+
+/*
+ * 지는 판을 새 대국으로 버리면 전적에서 빠져 점수가 높게 나온다. 그래서 기준 수 이상 둔
+ * 판은 기권패로 남긴다. 기준보다 짧은 판은 지금처럼 남기지 않는다 - 급수·쪽을 잘못 골라
+ * 다시 시작하는 때다. 경계 양쪽(10수·9수)을 본다.
+ */
+describe("오래 둔 판을 새 대국으로 버리면 기권패로 남는다", () => {
+  const 패널 = () => document.querySelector(".panel.play") as HTMLElement;
+  const 기보 = () => JSON.parse(localStorage.getItem("janggi:games") ?? "[]") as ArchivedGame[];
+
+  /**
+   * 두던 판을 plies 수까지 둔 모양으로 넣는다. 양쪽 졸·병을 차례로 한 칸씩 앞으로, 열한째
+   * 수는 초의 졸을 옆으로. flagged 를 주면 그쪽의 시간패로 끝난 판이다.
+   */
+  function 두던판(plies: number, id: string, flagged: Side | null = null) {
+    const 수: [Square, Square][] = [
+      ["a4", "a5"], ["a7", "a6"], ["c4", "c5"], ["c7", "c6"], ["e4", "e5"],
+      ["e7", "e6"], ["g4", "g5"], ["g7", "g6"], ["i4", "i5"], ["i7", "i6"],
+      ["a5", "b5"],
+    ];
+    let history: HistoryEntry[] = startHistory(START_FEN);
+    for (const [from, to] of 수.slice(0, plies)) {
+      history = [...history, nextEntry(history[history.length - 1].fen, from, to)];
+    }
+    writeStored("game", { id, history, cursor: plies, resigned: null, flagged });
+  }
+
+  const 확인창 = () => screen.getByRole("alertdialog");
+  const 확인단추 = () => within(확인창()).getByRole("button", { name: "새 대국" });
+
+  function 새대국() {
+    fireEvent.click(within(패널()).getByRole("button", { name: "새 대국" }));
+    return 확인창();
+  }
+
+  it("10수를 둔 판은 확인 창이 미리 말하고, 확인하면 기권패(엔진 쪽 승)로 남는다", async () => {
+    expect(RESIGN_ON_ABANDON_PLIES).toBe(10);
+    두던판(10, "길게-둔-판"); // 초 차례 = 내 차례
+    await start();
+
+    const 창 = 새대국();
+    expect(창.textContent).toContain("두던 판은 기권패로 기보 목록에 남습니다.");
+    const 확인 = within(창).getByRole("button", { name: "새 대국" });
+    // 되돌릴 수 없는 확인이라 기권 확인과 같은 붉은 단추다.
+    expect(확인.className).toContain("danger");
+    fireEvent.click(확인);
+
+    await waitFor(() => expect(기보()).toHaveLength(1));
+    const [판] = 기보();
+    expect(판.id).toBe("길게-둔-판");
+    expect(판.result).toEqual({ kind: "resign", winner: "han" });
+    expect(판.history).toHaveLength(11);
+    // 새 판이 놓이고, 결과 창은 뜨지 않고, 판이 끝났다는 측정도 가지 않는다.
+    await waitFor(() => expect(piece("a4")).not.toBeNull());
+    expect(document.querySelector(".dialog.result")).toBeNull();
+    expect(보낸횟수("game_end")).toBe(0);
+    expect(보낸횟수("game_start")).toBe(1);
+  });
+
+  it("9수를 둔 판은 지금처럼 남지 않는다", async () => {
+    writeStored("mySide", "han"); // 9수 뒤는 한 차례 = 내 차례. 엔진이 열째 수를 두지 않게
+    두던판(9, "짧게-둔-판");
+    await start();
+
+    const 창 = 새대국();
+    expect(창.textContent).toContain("두던 판은 사라집니다.");
+    fireEvent.click(within(창).getByRole("button", { name: "새 대국" }));
+
+    await waitFor(() => expect(piece("a7")).not.toBeNull());
+    await new Promise((r) => setTimeout(r, 100));
+    expect(기보()).toHaveLength(0);
+  });
+
+  it("10수를 두고 끝난 판은 새 대국을 확인해도 기보 목록의 결과가 그대로다", async () => {
+    // 끝난 판은 끝날 때 이미 목록에 들었다. 같은 판 번호로 기권패를 넣으면 그 결과를 덮는다.
+    두던판(10, "끝난-판", "cho"); // 초(나)의 시간패
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "닫기" }));
+    await waitFor(() => expect(기보()).toHaveLength(1));
+    const [끝난판] = 기보();
+    expect(끝난판.result).toEqual({ kind: "flag", winner: "han" });
+
+    expect(새대국().textContent).toContain("끝난 판은 기보 목록에서 다시 볼 수 있습니다.");
+    fireEvent.click(확인단추());
+
+    await waitFor(() => expect(piece("a4")).not.toBeNull());
+    expect(기보()).toEqual([끝난판]);
+  });
+
+  /*
+   * 확인 창이 열린 동안에도 엔진은 둔다. 창을 연 때와 누른 때의 판단이 다르면 판을 넘기지
+   * 않고 바뀐 글로 다시 묻는다(App 의 asking 주석). 초를 잡으면 홀수 수 뒤가 엔진 차례다.
+   */
+  it("9수에서 연 창이 열린 동안 엔진이 열째 수를 두면, 확인해도 넘기지 않고 기권패로 다시 묻는다", async () => {
+    engine().searchMs = 500; // 엔진이 늦게 둔다. 그사이 창을 연다
+    두던판(9, "아홉수");
+    render(<App />);
+    await waitFor(() => expect(engine().searches.length).toBeGreaterThan(0));
+
+    const 창 = 새대국();
+    expect(창.textContent).toContain("두던 판은 사라집니다.");
+    expect(확인단추().className).not.toContain("danger");
+    await engineReply(1);
+    // 창의 글은 연 때 그대로다. 사람이 읽은 글과 누르는 단추의 뜻이 같아야 한다.
+    expect(확인창().textContent).toContain("두던 판은 사라집니다.");
+
+    // 사람이 누를 때처럼 초점을 단추에 둔다(fireEvent.click 은 초점을 옮기지 않는다).
+    확인단추().focus();
+    fireEvent.click(확인단추());
+    expect(확인창().textContent).toContain(
+      "그사이 판이 바뀌었습니다. 두던 판은 기권패로 기보 목록에 남습니다."
+    );
+    expect(확인단추().className).toContain("danger");
+    // 새로 띄운 창이라 초점이 '취소' 에 있다. 이어 누른 엔터로 기권패가 들지 않는다.
+    expect(document.activeElement).toBe(within(확인창()).getByRole("button", { name: "취소" }));
+    expect(기보()).toHaveLength(0);
+
+    fireEvent.click(확인단추());
+    await waitFor(() => expect(기보()).toHaveLength(1));
+    const [판] = 기보();
+    expect(판.result).toEqual({ kind: "resign", winner: "han" });
+    expect(판.history).toHaveLength(11);
+  });
+
+  it("기권패로 남는다고 연 창이 열린 동안 판이 끝나면, 확인해도 끝난 판의 결과를 덮지 않는다", async () => {
+    // 11수 뒤는 엔진(한) 차례. 엔진의 열두째 수 뒤 국면을 초의 외통으로 꾸민다(장군, 한수쉼뿐).
+    engine().searchMs = 500;
+    engine().probeAnswer = (ref) =>
+      ref.moves.length === 12 ? { checkers: ["e3"], legal: ["e2e2"] } : null;
+    두던판(11, "끝날-판");
+    render(<App />);
+    await waitFor(() => expect(engine().searches.length).toBeGreaterThan(0));
+
+    expect(새대국().textContent).toContain("두던 판은 기권패로 기보 목록에 남습니다.");
+    await engineReply(1);
+    await waitFor(() => expect(기보()).toHaveLength(1));
+    const [끝난판] = 기보();
+    expect(끝난판.result).toEqual({ kind: "checkmate", winner: "han" });
+
+    fireEvent.click(확인단추());
+    expect(확인창().textContent).toContain(
+      "그사이 판이 바뀌었습니다. 끝난 판은 기보 목록에서 다시 볼 수 있습니다."
+    );
+    fireEvent.click(확인단추());
+
+    await waitFor(() => expect(piece("a4")).not.toBeNull());
+    expect(기보()).toEqual([끝난판]);
   });
 });
 

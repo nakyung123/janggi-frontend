@@ -66,7 +66,7 @@ import { usePractice } from "./hooks/usePractice";
 import { useServerGames } from "./hooks/useServerGames";
 import { useReview } from "./hooks/useReview";
 
-import { newGameId, upsertGame } from "./janggi/archive";
+import { RESIGN_ON_ABANDON_PLIES, newGameId, upsertGame } from "./janggi/archive";
 import type { ArchivedGame, ArchivedResult } from "./janggi/archive";
 import type { Position, Square } from "./janggi/board";
 import { START_FEN, parseFen, toFen, undoTarget } from "./janggi/board";
@@ -98,6 +98,12 @@ import type { ScreenId } from "./screens";
 
 /** 메뉴 두 곳(폰 ☰ · 왼쪽 메뉴)이 그리는 목록. */
 const MENU = menuOf(SCREENS);
+
+/** 새 대국 확인 창이 묻는 것. 무엇이 달라지는지 한 줄과, 확인하면 두던 판이 기권패로 남는지. */
+interface NewGameAsk {
+  message: string;
+  resign: boolean;
+}
 
 export default function App() {
   const { engine, status, progress, error } = useEngine();
@@ -241,6 +247,15 @@ export default function App() {
   const position = useMemo(() => parseFen(entry.fen), [entry.fen]);
   /** 대국 탭의 판에 한 수라도 뒀는지. 시계·규칙 잠금·새 대국 확인이 본다. */
   const started = playHistory.length > 1;
+  /**
+   * 내가 이 판에 한 수라도 뒀는지. 쪽·급수 잠금이 본다. 판이 끝난 순간의 급수·쪽으로
+   * 전적을 세므로(hooks/stats.ts), 두는 중에 바꾸지 못하게 한다.
+   *
+   * `started` 로 잠그지 않는다. 한을 잡으면 엔진이 판이 놓이자마자 첫 수를 두어서, 그것으로
+   * 잠그면 한을 잡은 사람은 쪽·급수를 바꿀 틈이 없다. 무르기로 되감은 수도 기보에 남아
+   * 있으면 센다 - 되감아서 잠금을 푸는 길을 두지 않는다.
+   */
+  const moved = playHistory.some((h, i) => i > 0 && h.mover === mySide);
 
   /*
    * 첫 수를 둔 것을 한 판에 한 번만 알린다.
@@ -730,15 +745,43 @@ export default function App() {
   };
 
   /**
+   * 새 대국을 누르면 두던 판이 기권패로 남는지. 끝나지 않았고 기보가 기준 수 이상이면 남는다
+   * (archive.ts 의 RESIGN_ON_ABANDON_PLIES).
+   */
+  const abandonIsResign = !ended && playHistory.length - 1 >= RESIGN_ON_ABANDON_PLIES;
+
+  /** 새 대국 확인 창에 적을 한 줄과, 확인하면 두던 판이 기권패로 남는지. 지금 판으로 센다. */
+  const newGameAsk = (): NewGameAsk => ({
+    resign: abandonIsResign,
+    message: !started
+      ? "판을 처음 모양으로 다시 놓습니다."
+      : ended
+        ? "끝난 판은 기보 목록에서 다시 볼 수 있습니다."
+        : abandonIsResign
+          ? "두던 판은 기권패로 기보 목록에 남습니다."
+          : "두던 판은 사라집니다. 기보 목록에는 끝난 판만 남습니다.",
+  });
+
+  /**
    * 새 대국. 시작 국면(상차림 포함)은 그대로 두고 수만 지운다.
    *
-   * 두던 판은 남기지 않는다. 한동안 '중단' 으로 목록에 넣었는데(끝난 판은 끝날 때 이미
-   * 들어간다), 목록이 '기보' 인 이상 거기 선 것은 다 둔 판으로 읽힌다. 몇 수 두다 만
-   * 판이 섞여 서면 끝난 판을 골라내기가 오히려 어렵다. 없어지는 것은 새 대국을 묻는
-   * 창이 미리 말한다. 파일에서 불러온 끝나지 않은 기보는 그대로 '중단' 으로 든다 -
-   * 그건 사람이 일부러 가져온 것이다.
+   * 짧게 두다 만 판은 남기지 않는다. 한동안 '중단' 으로 목록에 넣었는데(끝난 판은 끝날 때
+   * 이미 들어간다), 목록이 '기보' 인 이상 거기 선 것은 다 둔 판으로 읽힌다. 몇 수 두다 만
+   * 판이 섞여 서면 끝난 판을 골라내기가 오히려 어렵다. 파일에서 불러온 끝나지 않은 기보는
+   * 그대로 '중단' 으로 든다 - 그건 사람이 일부러 가져온 것이다.
+   *
+   * **오래 둔 판은 기권패로 남긴다**(resign, 확인 창이 정해 넘긴다). 지는 판을 버리면 전적에서
+   * 빠져 점수가 높게 나온다. 기권 단추와 같은 모양으로 넣고, 로그인했으면 다른 판처럼 서버에
+   * 올라간다. 결과 창은 띄우지 않고 game_end 도 보내지 않는다 - 사람은 방금 확인 창에서
+   * 골랐고, game_end 는 '판이 끝나 결과 창이 뜬 판' 만 세어 왔다. 여기서 보내면 쌓인 기록과
+   * 뜻이 달라진다. 어느 쪽이든 새 대국을 묻는 창이 미리 말한다.
    */
-  const newGame = () => {
+  const newGame = (resign: boolean) => {
+    if (resign) {
+      const winner: Side = mySide === "cho" ? "han" : "cho";
+      setGames((list) => upsertGame(list, archiveOf({ kind: "resign", winner })));
+    }
+
     /*
      * **세션의 첫 판은 여기를 지나지 않는다.** 앱이 뜨면 판이 이미 놓여 있어서 '시작'
      * 이라는 순간이 없다. 그래서 이것은 "판을 시작했다" 가 아니라 **"한 판 더 뒀다"** 다.
@@ -787,8 +830,18 @@ export default function App() {
     forgetMoves();
   };
 
-  /** 판을 끝내는 두 동작(새 대국·기권)은 확인 창으로 한 번 더 묻는다. */
-  const [asking, setAsking] = useState<"new" | "resign" | null>(null);
+  /**
+   * 판을 끝내는 두 동작(새 대국·기권)은 확인 창으로 한 번 더 묻는다.
+   *
+   * 새 대국 창은 연 때의 글과 판단(newGameAsk)을 쥐고 그대로 보인다. 창이 열린 동안에도 엔진은
+   * 두므로, 9수째에 "사라집니다" 로 연 창이 엔진의 열째 수로 기권패가 될 수 있다. 확인을 누른
+   * 때 다시 세어 기권패로 남는지가 창에 적힌 것과 다르면, 판을 넘기지 않고 바뀐 글로 다시
+   * 묻는다(changed). 창이 열린 동안 판이 끝난 때(엔진의 외통 등)도 같다 - 끝난 판의 결과를
+   * 기권패로 덮지 않는다.
+   */
+  const [asking, setAsking] = useState<
+    ({ kind: "new"; changed: boolean } & NewGameAsk) | { kind: "resign" } | null
+  >(null);
 
   /** 메뉴의 '업데이트 내역' 으로 여는 창. 두던 판은 그대로 있다. */
   const [updatesOpen, setUpdatesOpen] = useState(false);
@@ -1054,7 +1107,7 @@ export default function App() {
 
       {Page ? (
         <main className="page">
-          <Page />
+          <Page games={games} server={server} />
         </main>
       ) : booting ? (
         <main className="page">
@@ -1145,6 +1198,7 @@ export default function App() {
                 mySide={mySide}
                 levelId={levelId}
                 started={started}
+                moved={moved}
                 ended={ended}
                 clockId={clockId}
                 onClock={setClockId}
@@ -1153,6 +1207,10 @@ export default function App() {
                 thinking={thinking}
                 hintNote={hintNote}
                 onMySide={(s) => {
+                  // 쪽은 내가 첫 수를 두기 전에만 바뀐다(moved). 그때 판에 수가 있으면 한을
+                  // 잡아 엔진이 먼저 둔 수뿐이다. 그대로 두면 엔진이 둔 초의 첫 수가 내 수가
+                  // 되어 바꾸자마자 잠기므로, 처음 국면(상차림은 그대로)으로 다시 놓는다.
+                  if (s !== mySide && started) startFrom(parseFen(playHistory[0].fen));
                   setMySide(s);
                   // 고른 쪽을 아래에 놓는다. 앉은 자리에서 보는 것이 기본이고,
                   // 뒤집어 보고 싶으면 판 뒤집기로 언제든 바꾼다.
@@ -1164,8 +1222,8 @@ export default function App() {
                 onSetup={(side: Side, setup: Setup) =>
                   startFrom({ ...position, board: applySetup(position.board, side, setup) })
                 }
-                onNewGame={() => setAsking("new")}
-                onResign={() => setAsking("resign")}
+                onNewGame={() => setAsking({ kind: "new", changed: false, ...newGameAsk() })}
+                onResign={() => setAsking({ kind: "resign" })}
               />
             )}
 
@@ -1245,26 +1303,32 @@ export default function App() {
       )}
       {noticeOpen && <NoticeDialog onClose={() => setNoticeOpen(false)} />}
 
-      {/* 새 대국은 언제 눌러도 묻는다. 무엇이 달라지는지 한 줄만 상황마다 다르게 적는다. */}
-      {asking === "new" && (
+      {/*
+        새 대국은 언제 눌러도 묻는다. 무엇이 달라지는지 한 줄만 상황마다 다르게 적는다(asking 주석).
+        다시 물을 때는 창을 새로 띄워 초점을 '취소' 로 돌린다. 다시 묻는 것은 기권패로 남는지가
+        바뀐 때뿐이라 resign 이 열쇠가 된다.
+      */}
+      {asking?.kind === "new" && (
         <ConfirmDialog
+          key={String(asking.resign)}
           title="새 대국을 시작할까요?"
-          message={
-            !started
-              ? "판을 처음 모양으로 다시 놓습니다."
-              : ended
-                ? "끝난 판은 기보 목록에서 다시 볼 수 있습니다."
-                : "두던 판은 사라집니다. 기보 목록에는 끝난 판만 남습니다."
-          }
+          message={(asking.changed ? "그사이 판이 바뀌었습니다. " : "") + asking.message}
           confirmLabel="새 대국"
+          // 기권패로 남는 것만 되돌릴 수 없다. 기권 확인과 같은 붉은 단추다.
+          danger={asking.resign}
           onConfirm={() => {
+            const now = newGameAsk();
+            if (now.resign !== asking.resign) {
+              setAsking({ kind: "new", changed: true, ...now });
+              return;
+            }
             setAsking(null);
-            newGame();
+            newGame(now.resign);
           }}
           onCancel={() => setAsking(null)}
         />
       )}
-      {asking === "resign" && (
+      {asking?.kind === "resign" && (
         <ConfirmDialog
           title="기권할까요?"
           message="이 판은 기권패로 끝납니다."

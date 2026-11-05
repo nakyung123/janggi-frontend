@@ -151,6 +151,27 @@ export interface ServerGames {
   busy: boolean;
   /** 마지막으로 어긋난 일. 한국어다. */
   error: string | null;
+  /**
+   * 서버가 가진 기보 목록. 받기 전, 받기가 어긋났을 때, 로그인하지 않았을 때는 `null` 이다.
+   * 빈 목록(`[]`)은 "서버에 판이 없다" 는 뜻이라 둘을 섞으면 받는 중이 0판으로 보인다.
+   * 전적 계산(hooks/stats.ts)이 쓴다.
+   */
+  summaries: ServerSummary[] | null;
+  /**
+   * 목록 받기가 어긋난 까닭. 한국어다. 올리기 실패는 `error` 에 있다 - 거기는 다음 올리기가
+   * 되면 비워지므로, 목록을 못 받은 것이 그대로 남지 않는다.
+   */
+  listError: string | null;
+  /** 목록을 다시 받는다. 목록 받기가 어긋났을 때 화면이 부른다. */
+  reloadList: () => void;
+  /**
+   * 이 앱이 뜬 뒤 지금 계정으로 올린 판인가. 전적 계산이 쓴다.
+   *
+   * `onServer` 와 다르다. 그것은 올린 기록(`janggi:uploaded`)을 보는데, 그 기록은 계정을
+   * 가리지 않는다. 로그아웃하지 않은 채 로그인이 풀린 뒤 다른 계정으로 들어오면 앞 계정이
+   * 올린 판이 남아 있어, 그것으로 세면 앞 계정의 판이 뒤 계정 점수에 들어간다.
+   */
+  uploadedHere: (id: string) => boolean;
   signOut: () => void;
   /**
    * 탈퇴. 서버의 기보가 사라진다.
@@ -175,8 +196,21 @@ export function useServerGames(games: ArchivedGame[]): ServerGames {
   const before = useRef<Set<string> | null>(null);
   if (before.current === null) before.current = new Set(games.map((g) => g.id));
 
-  /** 서버가 가진 목록. 로그인했을 때 한 번 받아 둔다. */
-  const [서버목록, set서버목록] = useState<ServerSummary[]>([]);
+  /** 서버가 가진 목록. 로그인했을 때 한 번 받아 둔다. 받기 전에는 null(summaries 주석). */
+  const [서버목록, set서버목록] = useState<ServerSummary[] | null>(null);
+  /** 목록 받기가 어긋난 까닭(listError 주석). */
+  const [목록실패, set목록실패] = useState<string | null>(null);
+  /** 목록을 다시 받을 때 올리는 번호. 바뀌면 아래 받기 효과가 다시 돈다. */
+  const [목록차례, set목록차례] = useState(0);
+
+  /**
+   * 이 앱이 뜬 뒤 지금 계정으로 올린 판(uploadedHere 주석).
+   *
+   * **메모리에만 둔다.** 기기에 남기면 계정을 가려 적어야 한다. 로그인은 구글을 거쳐 쪽이
+   * 다시 뜨는 일이라, 한 번 뜬 앱 안에서는 계정이 바뀌지 않는다. 로그아웃·탈퇴 때 비운다.
+   * 서버 목록을 받은 뒤 올린 판도 그 목록에는 없으므로, 전적 계산은 이것으로 그 판을 센다.
+   */
+  const [이번에올린것, set이번에올린것] = useState<ReadonlySet<string>>(() => new Set());
 
   useEffect(() => {
     let 살아있다 = true;
@@ -218,12 +252,25 @@ export function useServerGames(games: ArchivedGame[]): ServerGames {
       .catch((err) => {
         // **목록을 못 받아도 올리기는 돈다.** 받아 오는 것은 "다른 기기의 판을 보여
         // 주는" 일이라, 실패하면 이 기기의 판만 보이는 상태로 간다.
-        if (살아있다) setError(noteTrouble("기보 목록 받기", err).message);
+        if (!살아있다) return;
+        const message = noteTrouble("기보 목록 받기", err).message;
+        setError(message);
+        set목록실패(message);
       });
     return () => {
       살아있다 = false;
     };
-  }, [loggedIn, setUploaded]);
+  }, [loggedIn, setUploaded, 목록차례]);
+
+  /*
+   * 다시 받을 때 앞서 어긋난 까닭(error)도 지운다. 목록을 못 받은 말이 거기에도 들어가 있어서,
+   * 지우지 않으면 다시 받기가 된 뒤에도 그 말이 남는다. 다시 어긋나면 그때 또 적힌다.
+   */
+  const reloadList = useCallback(() => {
+    setError(null);
+    set목록실패(null);
+    set목록차례((n) => n + 1);
+  }, []);
 
   /** 올려야 할 판. 새로 생긴 판이거나, 올린 뒤 복기가 붙은 판이다. */
   const 올릴것 = useMemo(() => {
@@ -268,6 +315,7 @@ export function useServerGames(games: ArchivedGame[]): ServerGames {
 
       if (Object.keys(적을것).length > 0) {
         setUploaded((before) => ({ ...before, ...적을것 }));
+        set이번에올린것((before) => new Set([...before, ...Object.keys(적을것)]));
       }
       setError(어긋난말);
       보내는중.current = false;
@@ -276,9 +324,10 @@ export function useServerGames(games: ArchivedGame[]): ServerGames {
   }, [올릴것, setUploaded]);
 
   const onServer = useCallback((id: string) => uploaded[id] !== undefined, [uploaded]);
+  const uploadedHere = useCallback((id: string) => 이번에올린것.has(id), [이번에올린것]);
 
   /** 화면이 그대로 그릴 한 벌. 기기 목록과 서버 목록을 합친 것이다. */
-  const rows = useMemo(() => mergeRows(games, 서버목록, onServer), [games, 서버목록, onServer]);
+  const rows = useMemo(() => mergeRows(games, 서버목록 ?? [], onServer), [games, 서버목록, onServer]);
 
   /**
    * 서버에만 있는 판을 받아 온다.
@@ -315,7 +364,9 @@ export function useServerGames(games: ArchivedGame[]): ServerGames {
         // **올린 기록을 지운다.** 다음에 다른 사람이 로그인할 수 있다 - 남의 판을
         // "서버에 있음" 으로 표시하면 거짓이다.
         setUploaded({});
-        set서버목록([]);
+        set서버목록(null);
+        set목록실패(null);
+        set이번에올린것(new Set());
       })
       .catch((err) => setError(noteTrouble("로그아웃", err).message))
       .finally(() => setBusy(false));
@@ -330,11 +381,27 @@ export function useServerGames(games: ArchivedGame[]): ServerGames {
         // 로그아웃과 같은 뒷정리다. 올린 기록이 남으면 다음 사람의 판에 "서버에 있음"
         // 이 붙는다. **기기 목록(games)은 건드리지 않는다** - 서버 것만 가는 일이다.
         setUploaded({});
-        set서버목록([]);
+        set서버목록(null);
+        set목록실패(null);
+        set이번에올린것(new Set());
       })
       .catch((err) => setError(noteTrouble("탈퇴", err).message))
       .finally(() => setBusy(false));
   }, [setUploaded]);
 
-  return { loggedIn, loginPath: LOGIN_PATH, onServer, rows, pull, busy, error, signOut, withdraw };
+  return {
+    loggedIn,
+    loginPath: LOGIN_PATH,
+    onServer,
+    rows,
+    pull,
+    busy,
+    error,
+    summaries: 서버목록,
+    listError: 목록실패,
+    reloadList,
+    uploadedHere,
+    signOut,
+    withdraw,
+  };
 }

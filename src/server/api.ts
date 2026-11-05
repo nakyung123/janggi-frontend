@@ -145,6 +145,13 @@ export interface ServerSummary {
   lastFen: string | null;
 }
 
+/**
+ * 서버가 한 사람에게 받아 두는 기보 수. 넘으면 올리기를 거절하고, 목록도 이만큼까지만 준다.
+ * 백엔드 `GameStore.한도` 와 같은 값이다 - 거기를 바꾸면 여기도 바꾼다. 전적 화면이 "다
+ * 찼다" 를 알리는 데 쓴다(그 뒤 판은 서버에 없어 점수에 안 들어간다).
+ */
+export const SERVER_GAME_LIMIT = 500;
+
 /** 내 기보 목록. 서버가 끝난 순서로 준다. */
 export async function fetchGames(): Promise<ServerSummary[]> {
   const res = await read("/games");

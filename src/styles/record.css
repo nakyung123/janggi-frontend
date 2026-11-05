@@ -1,0 +1,130 @@
+/* 내 전적 화면(components/record/StatsScreen.tsx). 바깥 짜임은 배우기 글 화면(learn.css 의
+   .learn-doc: 폭 640 한 단, 제목 24/700)을 그대로 쓰고, 여기서는 카드 안만 정한다. 색·글자·
+   간격은 base.css 의 토큰만 쓴다. */
+
+/* 카드 안의 줄들. 한 묶음 안이라 12 보다 좁은 8 로 붙인다. */
+.record-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 점수: 큰 숫자(24/700, DESIGN.md 의 numeric-lg) + 가장 가까운 급수. 폰에서 넘치면 급수가
+   다음 줄로 간다. */
+.record-score {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 12px;
+}
+
+.record-score-num {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.record-score-near {
+  color: var(--text-sub);
+}
+
+/* 500판이 찼다. 헤더의 '잘못된 판' 과 같은 경고 색이다. */
+.record-warn {
+  color: var(--warn);
+}
+
+/* 기보를 서버에 올리지 못한 까닭. 기보 목록의 같은 줄(games.css 의 .games-sync-error)과 같은 색. */
+.record-alert {
+  color: var(--han);
+}
+
+/*
+ * 급수별 전적. 급수 이름은 폼의 라벨 칸과 같은 폭(96)에 두고 판 수는 그 옆에 선다 - 용어
+ * 목록(learn.css 의 .learn-terms)과 같은 줄 맞춤이다.
+ */
+.record-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.record-levels > div {
+  display: grid;
+  grid-template-columns: var(--label-w) minmax(0, 1fr);
+  column-gap: 12px;
+}
+
+.record-levels dt {
+  font-weight: 600;
+}
+
+.record-levels dd {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * 정확도 막대. 판마다 칸 하나를 나눠 갖고, 막대는 칸 가운데에 24 까지만 선다 - 판이 적으면
+ * 칸이 넓어도 막대가 뭉툭해지지 않고 남는 폭은 비워 둔다. 칸 사이 2 가 막대를 가른다(테두리를
+ * 긋지 않는다). 막대 끝은 위만 가장 작은 모서리(--radius-xs)로 둥글고 바닥은 각지다.
+ * 높이 64 가 100% 다.
+ *
+ * 한 계열이라 한 색이다. 진영 색과 파랑은 뜻이 따로 있어 쓰지 않고 껍데기 톤(ink-sub)을 쓴다.
+ */
+.record-bars {
+  display: flex;
+  gap: 2px;
+  height: 64px;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.record-bars > span {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.record-bars i {
+  width: 100%;
+  max-width: 24px;
+  background: var(--text-sub);
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+}
+
+.record-bars-ends {
+  display: flex;
+  justify-content: space-between;
+}
+
+/*
+ * 실수 구간 표. 숫자 칸은 오른쪽 끝을 맞추고 고정폭 숫자로 자릿수가 바뀌어도 흔들리지 않게
+ * 한다. 머리 줄은 라벨이라 muted 400. 320 폭(카드 안 264)에 네 칸이 한 줄로 든다.
+ */
+.record-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.record-table th,
+.record-table td {
+  padding: 4px 0;
+  text-align: right;
+}
+
+.record-table th:first-child {
+  text-align: left;
+}
+
+.record-table thead th {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.record-table tbody th {
+  font-weight: 600;
+}
