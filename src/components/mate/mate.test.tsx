@@ -192,6 +192,25 @@ describe("풀기", () => {
     expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ solved: [p.id] });
   });
 
+  it("목록으로 돌아오면 맨 위가 아니라 방금 연 문제의 줄이 보이게 쪽을 옮긴다", () => {
+    // jsdom 에는 구를 화면이 없다(test/browser.ts 가 비워 둠). 어느 줄을 보이게 했는지만 본다.
+    const 굴림 = vi.spyOn(Element.prototype, "scrollIntoView");
+    render(<MateScreen />);
+    expect(굴림).not.toHaveBeenCalled();
+
+    연다(묶음(3)[7]);
+    목록으로();
+    expect(굴림.mock.contexts.at(-1)).toBe(줄(3, 8));
+
+    // [다음 문제]로 넘어갔으면 마지막에 연 문제로 돌아온다.
+    연다(묶음(2)[12]);
+    끝까지푼다(묶음(2)[12]);
+    fireEvent.click(screen.getByRole("button", { name: "다음 문제" }));
+    목록으로();
+    expect(굴림.mock.contexts.at(-1)).toBe(줄(3, 1));
+    굴림.mockRestore();
+  });
+
   it("다음 문제는 전체 순서의 다음 문제를 열고, 마지막 문제에는 서지 않는다", () => {
     render(<MateScreen />);
     연다(묶음(1)[20]);

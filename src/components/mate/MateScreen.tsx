@@ -10,7 +10,7 @@
 // 다른 키는 건드리지 않는다.
 
 import { Check } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePersisted } from "../../hooks/usePersisted";
 import type { MatePuzzle } from "../../janggi/mate";
 import { MATES, NO_SOLVED, isSolvedRecord, nextOf, numberOf, solvedIn, withSolved } from "../../janggi/mate";
@@ -19,17 +19,27 @@ import { MateSolve } from "./MateSolve";
 const GROUPS = [1, 2, 3].map((n) => ({ n, puzzles: MATES.filter((p) => p.n === n) }));
 
 /**
- * 쪽을 맨 위로 올린다. 폰은 쪽 전체가 구르므로, 목록 아래에서 문제를 열면 풀기 화면이 중간부터
- * 보인다. 넓은 화면은 화면 칸(.page)이 구르는데, 풀기 화면은 칸 높이에 맞춰 서서 저절로 맨 위다.
+ * 문제를 열 때 쪽을 맨 위로 올린다. 폰은 쪽 전체가 구르므로, 목록 아래에서 문제를 열면 풀기 화면이
+ * 중간부터 보인다. 넓은 화면은 화면 칸(.page)이 구르는데, 풀기 화면은 칸 높이에 맞춰 서서 저절로 맨 위다.
  */
 const toTop = () => document.scrollingElement?.scrollTo?.(0, 0);
 
 export function MateScreen() {
   const [record, setRecord] = usePersisted("mate-solved", NO_SOLVED, isSolvedRecord);
   const [open, setOpen] = useState<MatePuzzle | null>(null);
+  /**
+   * 목록으로 돌아올 때 보일 문제(방금 열어 둔 것). 맨 위로 돌아오면 폰 320 에서 1,500px 가 넘는 목록을
+   * 다시 내려가야 한다. 이 화면에 있는 동안만 기억한다 - 저장하지 않는다.
+   */
+  const [cameFrom, setCameFrom] = useState<string | null>(null);
+  const cameFromRow = useRef<HTMLButtonElement>(null);
   const solved = solvedIn(record, MATES);
 
-  const show = (p: MatePuzzle | null) => {
+  useEffect(() => {
+    if (!open && cameFrom) cameFromRow.current?.scrollIntoView({ block: "center" });
+  }, [open, cameFrom]);
+
+  const show = (p: MatePuzzle) => {
     setOpen(p);
     toTop();
   };
@@ -42,7 +52,10 @@ export function MateScreen() {
         puzzle={open}
         onSolve={(id) => setRecord((r) => withSolved(r, id))}
         onNext={next ? () => show(next) : null}
-        onBack={() => show(null)}
+        onBack={() => {
+          setCameFrom(open.id);
+          setOpen(null);
+        }}
       />
     );
   }
@@ -70,6 +83,7 @@ export function MateScreen() {
                 return (
                   <li key={p.id}>
                     <button
+                      ref={p.id === cameFrom ? cameFromRow : undefined}
                       type="button"
                       className="ghost mate-item"
                       aria-label={[`${no}번`, isSolved && "풂", p.quiet && "첫 수가 장군 아님"].filter(Boolean).join(", ")}
