@@ -39,6 +39,7 @@ import { PlayPanel } from "./components/play/PlayPanel";
 
 import { playMoveSound } from "./audio/sound";
 import {
+  ANALYSIS_LINES,
   DEFAULT_LEVEL_ID,
   DEFAULT_REVIEW_DEPTH_ID,
   ENGINE_MOVE_CAP_MS,
@@ -54,6 +55,7 @@ import {
 import type { EngineOptions, PositionRef, SearchLimits, Variant } from "./engine/types";
 import { forgetIfMoved, isEnginePrefs, isVariant, positionKey } from "./engine/types";
 import { useAnalysis, useEngine, useHint } from "./engine/useEngine";
+import { useAnalysisBoard } from "./hooks/useAnalysisBoard";
 import { useBoardFit } from "./hooks/useBoardFit";
 import { useClockTicking, useGameClock } from "./hooks/useGameClock";
 import { useKeyboard } from "./hooks/useKeyboard";
@@ -335,17 +337,29 @@ export default function App() {
     [engineLevel, moveBudget]
   );
 
+  /*
+   * 분석판 - 국면을 만들고 둬 보며 AI 의 형세·추천 수를 본다. 엔진은 분석판 화면일 때만 넘긴다.
+   * 엔진 설정(추천 수 개수·규칙)은 아래 options 가 화면에 따라 계산해 건다. 대국 탭으로 돌아오면
+   * 같은 계산이 대국 값으로 돌아간다 - 분석판이 설정을 바꿔 놓고 되돌리는 일이 없다.
+   */
+  const analysis = useAnalysisBoard({
+    engine: mode === "analysis" ? engine : null,
+    engineStatus: status,
+    playFen: playHistory[playCursor].fen,
+    defaultVariant: prefs.variant,
+  });
+
   const options: EngineOptions = useMemo(
     () => ({
       ...prefs,
-      variant,
-      // 엔진은 제 수 하나만 고른다. 후보를 넓게 보면 느려질 뿐이다.
-      multiPV: 1,
+      variant: mode === "analysis" ? analysis.variant : variant,
+      // 엔진은 제 수 하나만 고른다. 후보를 넓게 보면 느려질 뿐이다. 분석판은 추천 수 셋을 보인다.
+      multiPV: mode === "analysis" ? ANALYSIS_LINES : 1,
       // 제 차례가 아니면 가장 센 값이다. 합법수·장군만 물을 때는 실력이 상관없고, 힌트(useHint)는
       // 이 값으로 찾는다 - 상대 급수의 세기로 찾으면 일부러 고른 나쁜 수를 가르친다.
       skill: engineTurn ? engineLevel.skill : 20,
     }),
-    [prefs, variant, engineTurn, engineLevel.skill]
+    [prefs, variant, engineTurn, engineLevel.skill, mode, analysis.variant]
   );
 
   /** 탐색을 다시 걸어야 하는지 가리는 열쇠. 이 값이 바뀔 때만 useAnalysis 가 새로 묻는다. */
@@ -1107,7 +1121,7 @@ export default function App() {
 
       {Page ? (
         <main className="page">
-          <Page games={games} server={server} />
+          <Page games={games} server={server} analysis={analysis} />
         </main>
       ) : booting ? (
         <main className="page">

@@ -22,7 +22,7 @@ import { Dropdown } from "../common/Dropdown";
  * 설명(desc)은 드롭다운 목록에서 이름 아래 한 줄로 보인다. 무엇이 다른지만 적는다.
  * 양쪽이 한수쉼을 이어 두면 판이 끝나는 것은 셋이 같다(점수제면 점수로, 전통은 비김).
  */
-const VARIANT_OPTIONS: { id: Variant; label: string; desc: string }[] = [
+export const VARIANT_OPTIONS: { id: Variant; label: string; desc: string }[] = [
   { id: "janggi", label: "표준", desc: "빅장은 점수로 · 200수 뒤 점수로" },
   { id: "janggimodern", label: "현대(카카오)", desc: "빅장 없음 · 같은 수 되풀이 금지 · 200수 뒤 점수로" },
   { id: "janggitraditional", label: "전통", desc: "빅장은 무승부 · 점수제 없음" },
