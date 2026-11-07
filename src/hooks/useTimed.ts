@@ -1,7 +1,8 @@
 // 시간 도전 - 한 판의 상태: 시작 전 → 도는 중 → 끝, 지금 문제, 푼 개수, 놓침, 남은 시간, 최고 기록
 //
 //   시작 전 ─ start → 도는 중 ─ 정답(solve) → 0.5초 뒤 다음 문제, 푼 개수 +1
-//                            ├ 답이 아닌 수·넘기기(miss) → 바로 다음 문제, 놓침 +1
+//                            ├ 답이 아닌 수(miss)·넘기기(skip) → 바로 다음 문제, 놓침 +1
+//                            │   넘기기는 새 문제가 선 뒤 0.3초 동안 받지 않는다(두 번 눌림)
 //                            └ 시간이 다 됨 / 세 번 놓침 / 문제를 다 지남 → 끝(최고 기록을 남긴다)
 //
 // 규칙과 계산은 janggi/timed.ts 에 있다. 문제 하나를 두는 것은 화면이 useMateSolve 로 한다 - 여기는
@@ -29,6 +30,13 @@ export const TIMED_KEY = "timed-best";
 /** 남은 시간을 다시 읽는 간격(ms). 화면의 초가 늦게 바뀌어 보이지 않을 만큼. */
 const TICK_MS = 200;
 
+/**
+ * 새 문제가 선 뒤 넘기기를 받지 않는 시간(ms). 넘기기를 누르면 같은 자리에 다음 문제의 넘기기가 선다.
+ * 폰에서 두 번 눌리면(손가락이 떨리거나 두 번 두드림) 두 문제를 놓쳐, 세 번 놓치면 끝나는 판의 셋 중 둘을
+ * 쓴다. 두 번 두드림의 사이는 보통 0.3초 안이다(추정). 단추는 그동안 꺼져 보인다.
+ */
+export const SKIP_GUARD_MS = 300;
+
 /** 끝난 까닭 */
 export type TimedEnd = "time" | "misses" | "all";
 
@@ -45,6 +53,8 @@ interface Round {
   missedLast: boolean;
   /** 정답을 두고 다음 문제를 기다리는 중(0.5초). 그동안 넘기기를 받지 않는다 */
   waiting: boolean;
+  /** 지금 문제가 선 시각. 넘기기를 막는 시간(SKIP_GUARD_MS)을 여기서 센다 */
+  shownAt: number;
 }
 
 interface Result {
@@ -64,6 +74,8 @@ export interface Timed {
   remainingMs: number;
   missedLast: boolean;
   waiting: boolean;
+  /** 지금 넘기기를 받는다. 도는 중, 다음 문제를 기다리지 않고, 문제가 선 지 SKIP_GUARD_MS 가 지났을 때 */
+  canSkip: boolean;
   /** 끝난 까닭. 끝난 뒤에만 */
   end: TimedEnd | null;
   /** 이 기기의 최고 기록(지금 규칙). 없으면 null */
@@ -72,8 +84,10 @@ export interface Timed {
   start: () => void;
   /** 지금 문제를 정답을 보지 않고 풀었다 */
   solve: (id: string) => void;
-  /** 지금 문제를 놓쳤다(답이 아닌 수, 넘기기) */
+  /** 지금 문제를 놓쳤다(답이 아닌 수) */
   miss: () => void;
+  /** 넘기기. 놓친 것과 같다. canSkip 이 아닐 때는 받지 않는다 */
+  skip: () => void;
 }
 
 const readRecord = () => readStored(TIMED_KEY, NO_TIMED, isTimedRecord);
@@ -137,6 +151,12 @@ export function useTimed(list: readonly MatePuzzle[] = MATES, rand: () => number
   }, [endNow, round, best]);
 
   const phase: TimedPhase = round === null ? "ready" : result || endNow ? "over" : "running";
+  const skipOpen = (at: number) => !!round && !round.waiting && at - round.shownAt >= SKIP_GUARD_MS;
+
+  const miss = () => {
+    if (phase !== "running" || !round || round.waiting) return;
+    setRound({ ...round, misses: round.misses + 1, index: round.index + 1, missedLast: true, shownAt: Date.now() });
+  };
 
   return {
     phase,
@@ -147,6 +167,7 @@ export function useTimed(list: readonly MatePuzzle[] = MATES, rand: () => number
     remainingMs: remaining,
     missedLast: round?.missedLast ?? false,
     waiting: round?.waiting ?? false,
+    canSkip: phase === "running" && skipOpen(now),
     end: result?.end ?? endNow,
     best,
     newBest: result?.newBest ?? false,
@@ -154,7 +175,16 @@ export function useTimed(list: readonly MatePuzzle[] = MATES, rand: () => number
     start: () => {
       stopNext();
       const t = Date.now();
-      setRound({ deck: deckOf(list, rand), index: 0, solved: 0, misses: 0, startedAt: t, missedLast: false, waiting: false });
+      setRound({
+        deck: deckOf(list, rand),
+        index: 0,
+        solved: 0,
+        misses: 0,
+        startedAt: t,
+        missedLast: false,
+        waiting: false,
+        shownAt: t,
+      });
       setNow(t);
       setResult(null);
     },
@@ -164,13 +194,16 @@ export function useTimed(list: readonly MatePuzzle[] = MATES, rand: () => number
       setRound({ ...round, solved: round.solved + 1, waiting: true });
       nextTimer.current = setTimeout(() => {
         nextTimer.current = null;
-        setRound((r) => r && { ...r, index: r.index + 1, missedLast: false, waiting: false });
+        setRound((r) => r && { ...r, index: r.index + 1, missedLast: false, waiting: false, shownAt: Date.now() });
       }, REPLY_DELAY_MS);
     },
 
-    miss: () => {
-      if (phase !== "running" || !round || round.waiting) return;
-      setRound({ ...round, misses: round.misses + 1, index: round.index + 1, missedLast: true });
+    miss,
+
+    skip: () => {
+      // 그린 때의 canSkip 이 아니라 지금 시각으로 본다. 두 번째 누름은 다시 그리기 전에 올 수 있다.
+      if (!skipOpen(Date.now())) return;
+      miss();
     },
   };
 }

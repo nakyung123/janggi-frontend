@@ -65,7 +65,7 @@ export function TimedScreen() {
         onWrong={t.miss}
         startNote={t.missedLast ? `앞 문제를 놓쳤습니다. ${p.n}수 안에 외통을 거세요.` : undefined}
         extra={
-          <button type="button" className="mate-next" onClick={t.miss} disabled={t.waiting}>
+          <button type="button" className="mate-next" onClick={t.skip} disabled={!t.canSkip}>
             넘기기
           </button>
         }

@@ -11,7 +11,7 @@ import type { MatePuzzle } from "../janggi/mate";
 import { MATES } from "../janggi/mate";
 import { TIMED_RULE, deckOf } from "../janggi/timed";
 import { REPLY_DELAY_MS } from "./useMateSolve";
-import { useTimed } from "./useTimed";
+import { SKIP_GUARD_MS, useTimed } from "./useTimed";
 
 const KEY = "janggi:timed-best";
 const 영 = () => 0;
@@ -80,6 +80,23 @@ describe("도는 중", () => {
     expect(now().misses).toBe(0);
     act(() => vi.advanceTimersByTime(REPLY_DELAY_MS));
     expect(now()).toMatchObject({ solved: 1, waiting: false, index: 1, puzzle: 순서[1], missedLast: false });
+  });
+
+  it("넘기기는 새 문제가 선 뒤 0.3초 동안 받지 않는다. 답이 아닌 수(miss)는 막지 않는다", () => {
+    const { now } = 띄운다();
+    act(() => now().start());
+    expect(now().canSkip).toBe(false);
+    act(() => now().skip());
+    expect(now().misses).toBe(0);
+
+    act(() => vi.advanceTimersByTime(SKIP_GUARD_MS + 200));
+    expect(now().canSkip).toBe(true);
+    act(() => now().skip());
+    act(() => now().skip());
+    expect(now()).toMatchObject({ misses: 1, index: 1, canSkip: false });
+
+    act(() => now().miss());
+    expect(now().misses).toBe(2);
   });
 
   it("지금 문제가 아닌 id 는 푼 것으로 세지 않는다", () => {
