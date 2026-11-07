@@ -14,6 +14,7 @@ import { useId } from "react";
 import type { AnalysisBoard, EditTool, StartKind } from "../../hooks/useAnalysisBoard";
 import type { PieceType, Side } from "../../janggi/pieces";
 import { SIDE_LABEL, charOf, pieceInfo } from "../../janggi/pieces";
+import { outcomeMessage } from "../../janggi/status";
 import type { PageProps } from "../../screens";
 import { Board } from "../board/Board";
 import { PieceBody } from "../board/PieceGlyph";
@@ -75,6 +76,7 @@ export function AnalysisScreen({ analysis: a }: Pick<PageProps, "analysis">) {
             position={a.position}
             invalid={a.problems.length > 0}
             outcome={a.outcome}
+            playing={a.mode === "play"}
           />
         </div>
       </div>
@@ -231,10 +233,7 @@ function PlayTools({ a }: { a: AnalysisBoard }) {
 
 /** 두어 보기의 상태 한 줄. 끝났으면 대국과 같은 결과 문구, 아니면 둘 차례와 장군·빅장. */
 function stateText(a: AnalysisBoard): string {
-  if (a.outcome) {
-    // 결과 문구는 AI 분석 칸이 말한다. 여기서는 판이 끝났다는 것만.
-    return "판이 끝났습니다. 이전으로 가서 다른 수를 둬 볼 수 있습니다.";
-  }
+  if (a.outcome) return outcomeMessage(a.outcome);
   const turn = `${SIDE_LABEL[a.position.turn]} 차례`;
   if (a.status.kind === "check") return `${turn} · 장군`;
   if (a.status.kind === "facing") return `${turn} · 빅장`;

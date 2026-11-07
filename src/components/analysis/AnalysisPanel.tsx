@@ -34,9 +34,11 @@ interface Props {
   /** 국면이 맞지 않으면 AI 가 보지 않는다 */
   invalid: boolean;
   outcome: Outcome | null;
+  /** 두어 보기 중인지. 그때는 끝난 까닭을 판 아래 상태 줄이 말하므로 여기서 되풀이하지 않는다. */
+  playing: boolean;
 }
 
-export function AnalysisPanel({ engineStatus, on, onToggle, snapshot, position, invalid, outcome }: Props) {
+export function AnalysisPanel({ engineStatus, on, onToggle, snapshot, position, invalid, outcome, playing }: Props) {
   const lines = snapshot?.lines ?? [];
   const top = lines[0];
   const cho = top ? winPercent(clampScore(top.score, top.mate)) : null;
@@ -52,7 +54,9 @@ export function AnalysisPanel({ engineStatus, on, onToggle, snapshot, position, 
           : invalid
             ? "국면을 다 만들면 AI가 봅니다."
             : outcome
-              ? outcomeMessage(outcome)
+              ? playing
+                ? "끝난 국면이라 더 읽지 않습니다. 이전으로 가서 다른 수를 둬 볼 수 있습니다."
+                : outcomeMessage(outcome)
               : cho === null
                 ? "AI가 수를 읽는 중…"
                 : null;
