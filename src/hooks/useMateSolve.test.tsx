@@ -215,3 +215,29 @@ describe("정답 보기와 처음부터", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 });
+
+describe("답이 아닌 수를 받는 쪽(onWrong - 시간 도전)", () => {
+  it("주면 답이 아닌 수의 기보 표기로 부르고, 판과 알림 줄은 그대로다", () => {
+    const onWrong = vi.fn();
+    const hook = renderHook(() => useMateSolve(두수, vi.fn(), { onWrong }));
+    const 틀린수 = 오답(두수, 0);
+    둔다(hook, 틀린수);
+    expect(onWrong).toHaveBeenCalledTimes(1);
+    expect(onWrong).toHaveBeenCalledWith(describeMove(틀린수, positionAt(두수, 0).board).short);
+    expect(hook.result.current.note).toEqual({ kind: "start" });
+    expect(hook.result.current.position).toEqual(positionAt(두수, 0));
+  });
+
+  it("정답에는 부르지 않고, 응수·끝·푼 문제 알림은 주지 않을 때와 같다", () => {
+    const onWrong = vi.fn();
+    const onSolve = vi.fn();
+    const hook = renderHook(() => useMateSolve(두수, onSolve, { onWrong }));
+    둔다(hook, 두수.line[0]);
+    응수를기다린다();
+    expect(hook.result.current.note.kind).toBe("replied");
+    둔다(hook, 두수.line[2]);
+    expect(hook.result.current.phase).toBe("done");
+    expect(onSolve).toHaveBeenCalledWith(두수.id);
+    expect(onWrong).not.toHaveBeenCalled();
+  });
+});
