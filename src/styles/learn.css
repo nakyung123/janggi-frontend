@@ -172,6 +172,38 @@
   padding: 0 4px;
 }
 
+/* 포진 다섯이 320 폰의 한 줄에 서도록 칸 안쪽 여백을 줄인다(가장 긴 이름이 세 글자). */
+.learn-openings button {
+  padding: 0 4px;
+}
+
+/*
+ * 포진 화면의 오른쪽 칸: 모양 만드는 수(작은 제목 · 지금 수 · 처음·이전·다음·끝 · 정석이 아니라는
+ * 말) → 포진 설명 카드. 두 묶음 사이 24.
+ */
+.opening-desc {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.opening-steps-title {
+  font-size: var(--fs-base);
+  font-weight: 600;
+}
+
+/* 지금 수. 한 줄 높이를 잡아 둔다 - 글이 바뀌어도 아래 단추가 움직이지 않는다. */
+.opening-step {
+  min-height: calc(1em * 1.4);
+  margin: 4px 0 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.opening-caveat,
+.opening-more {
+  margin-top: 12px;
+}
+
 /* 설명 카드: 기물 그림(초·한) + 이름, 그 아래 한쪽 수와 점수. */
 .learn-piece-head {
   display: flex;
