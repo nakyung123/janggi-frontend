@@ -475,7 +475,18 @@ describe("포진 화면", () => {
       포진고르기(o.name);
       expect(screen.getByText(/^모양 만드는 수는 정석이 아니고, 상대가 가만히 있다고 친 길입니다\./)).toBeTruthy();
     }
-    fireEvent.click(단추("처음으로"));
+    /*
+     * 집히지 않는 기물에는 판이 fixed 를 붙인다(Board.tsx). 붙지 않으면 손 모양 커서가 서고, 끌면
+     * 기물이 손을 따라오며, 폰에서 기물을 밀어 쪽을 굴릴 수 없다. 판이 그대로인지만 보면 이것을
+     * 놓친다 - 화면은 옮기는 수를 받아도 아무 일도 하지 않는다.
+     */
+    const 안고정 = () => [...document.querySelectorAll("[data-piece]")].filter((g) => !g.classList.contains("fixed"));
+    for (const o of OPENINGS) {
+      포진고르기(o.name);
+      expect([o.name, "완성", document.querySelectorAll("[data-piece]").length, 안고정()]).toEqual([o.name, "완성", 32, []]);
+      fireEvent.click(단추("처음으로"));
+      expect([o.name, "처음", 안고정()]).toEqual([o.name, "처음", []]);
+    }
     const before = 판기물();
     // 마지막에 고른 양귀상은 마상상마 차림이다. 02 의 마는 83 으로 갈 수 있는 기물이다.
     fireEvent.pointerUp(screen.getByRole("gridcell", { name: "02 초 마" }));
