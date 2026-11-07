@@ -424,6 +424,21 @@ describe("포진 화면", () => {
     expect(seen).toEqual(expected);
   });
 
+  it("한 칸 오가면 기물이 날아간다 - 다음은 그 수대로, 이전은 거꾸로. 처음·끝으로 건너뛰면 날지 않는다", () => {
+    render(<OpeningsScreen />);
+    포진고르기("원앙마");
+    /** 날아오는 기물이 선 칸들(판이 도착 칸의 기물 안에 .fly 를 그린다). */
+    const 나는칸 = () => [...document.querySelectorAll("[data-piece]")].filter((g) => g.querySelector(".fly")).map((g) => g.getAttribute("data-piece"));
+    fireEvent.click(단추("처음으로"));
+    expect(나는칸()).toEqual([]);
+    fireEvent.click(단추("다음")); // 75졸74 = e4d4
+    expect(나는칸()).toEqual(["d4"]);
+    fireEvent.click(단추("이전")); // 74 의 졸이 75 로 돌아간다
+    expect(나는칸()).toEqual(["e4"]);
+    fireEvent.click(단추("끝으로"));
+    expect(나는칸()).toEqual([]);
+  });
+
   it("차림 고르기는 차림이 둘 이상인 귀마·면상에만 있다", () => {
     render(<OpeningsScreen />);
     const 차림 = () =>

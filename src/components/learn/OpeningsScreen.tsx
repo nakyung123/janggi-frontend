@@ -62,7 +62,10 @@ export function OpeningsScreen() {
   const line = opening.lines[lineIdx];
   const last = line.moves.length;
   const [step, setStep] = useState(last);
-  /** 다음을 눌러 한 수 나아갈 때만 기물이 날아간다. key 는 누를 때마다 커진다. */
+  /**
+   * 한 칸 오갈 때 기물이 날아간다(대국·기보 탭과 같다). 다음은 그 수를, 이전은 그 수를 거꾸로.
+   * 처음·끝으로 건너뛸 때는 날지 않는다. key 는 누를 때마다 커진다.
+   */
   const [fly, setFly] = useState<{ from: string; to: string; key: number } | null>(null);
 
   const position = positionAt(line, step);
@@ -70,7 +73,15 @@ export function OpeningsScreen() {
   const shown = move ? describeMove(move, positionAt(line, step - 1).board).short : null;
 
   const go = (next: number) => {
-    setFly(next === step + 1 ? { ...splitMove(line.moves[step]), key: (fly?.key ?? 0) + 1 } : null);
+    const key = (fly?.key ?? 0) + 1;
+    if (next === step + 1) {
+      setFly({ ...splitMove(line.moves[step]), key });
+    } else if (next === step - 1) {
+      const { from, to } = splitMove(line.moves[next]);
+      setFly({ from: to, to: from, key });
+    } else {
+      setFly(null);
+    }
     setStep(next);
   };
   const pickOpening = (next: Opening) => {
