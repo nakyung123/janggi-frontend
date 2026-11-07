@@ -99,7 +99,7 @@ describe("놓기", () => {
 describe("빼기·옮기기", () => {
   it("뺀다", () => {
     expect(removePiece({ a1: "R", e2: "K" }, "a1")).toEqual({ e2: "K" });
-    const same = { e2: "K" };
+    const same: Board = { e2: "K" };
     expect(removePiece(same, "a1")).toBe(same);
   });
 
