@@ -41,7 +41,7 @@ const 묶음 = (n: number) => MATES.filter((p) => p.n === n);
 // --- 메뉴 ------------------------------------------------------------------------
 
 describe("메뉴", () => {
-  it("문제 묶음은 이름 \"문제\" 아래 외통 문제 · 오늘의 문제 순서로 서고, 외통 문제를 누르면 목록이 선다", async () => {
+  it("문제 묶음은 이름 \"문제\" 아래 외통 문제 · 오늘의 문제 · 시간 도전 순서로 서고, 외통 문제를 누르면 목록이 선다", async () => {
     render(<App />);
     await waitFor(() => expect(screen.getByRole("button", { name: "새 대국" })).toBeTruthy());
 
@@ -50,7 +50,7 @@ describe("메뉴", () => {
     const 문제묶음 = [...모드.querySelectorAll(".menu-group")].find(
       (g) => g.querySelector(".menu-heading")?.textContent === "문제"
     )!;
-    expect([...문제묶음.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["외통 문제", "오늘의 문제"]);
+    expect([...문제묶음.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["외통 문제", "오늘의 문제", "시간 도전"]);
     fireEvent.click(within(모드).getByRole("button", { name: "외통 문제" }));
     expect(screen.getByRole("heading", { level: 2, name: "외통 문제" })).toBeTruthy();
 

@@ -87,3 +87,57 @@
 .mate-next {
   width: 100%;
 }
+
+/* --- 시간 도전(TimedScreen) ------------------------------------------------- */
+
+/*
+ * 판 바로 위 상태 줄: 남은 시간(24/700) ········ 푼 문제 · 놓침. 남은 시간이 이 화면에서 가장 큰 글이라
+ * 제목을 두지 않는다. 320 폰(폭 288)에 한 줄로 든다. 더 좁으면 줄이 접힌다.
+ */
+.timed-status {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 16px;
+}
+
+.timed-clock {
+  margin-right: auto;
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 마지막 10초. 대국 시계의 급한 시간과 같은 색이다. */
+.timed-clock.low {
+  color: var(--han);
+}
+
+/* 시작 전·끝 카드: 규칙(또는 결과) · 최고 기록 · 채운 버튼 하나. */
+.timed-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.timed-card .learn-list {
+  margin-top: 0;
+}
+
+/* 푼 개수(24/700) + "풀었습니다". 끝 화면에서 가장 먼저 읽히는 숫자다. */
+.timed-score b {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.timed-new {
+  font-weight: 600;
+}
+
+.timed-go {
+  width: 100%;
+  margin-top: 12px;
+}
