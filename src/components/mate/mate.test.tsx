@@ -41,13 +41,16 @@ const 묶음 = (n: number) => MATES.filter((p) => p.n === n);
 // --- 메뉴 ------------------------------------------------------------------------
 
 describe("메뉴", () => {
-  it("문제 묶음에는 외통 문제 하나뿐이라 묶음 이름 없이 서고, 누르면 외통 문제 목록이 선다", async () => {
+  it("문제 묶음은 이름 \"문제\" 아래 외통 문제 · 오늘의 문제 · 시간 도전 순서로 서고, 외통 문제를 누르면 목록이 선다", async () => {
     render(<App />);
     await waitFor(() => expect(screen.getByRole("button", { name: "새 대국" })).toBeTruthy());
 
     const 왼쪽메뉴 = screen.getByRole("complementary", { name: "왼쪽 메뉴" });
     const 모드 = within(왼쪽메뉴).getByRole("navigation", { name: "모드" });
-    expect(within(모드).queryByText("문제")).toBeNull();
+    const 문제묶음 = [...모드.querySelectorAll(".menu-group")].find(
+      (g) => g.querySelector(".menu-heading")?.textContent === "문제"
+    )!;
+    expect([...문제묶음.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["외통 문제", "오늘의 문제", "시간 도전"]);
     fireEvent.click(within(모드).getByRole("button", { name: "외통 문제" }));
     expect(screen.getByRole("heading", { level: 2, name: "외통 문제" })).toBeTruthy();
 

@@ -50,6 +50,7 @@ export function MateScreen() {
       <MateSolve
         key={open.id}
         puzzle={open}
+        title={`${open.n}수 외통 · ${numberOf(open)}번`}
         onSolve={(id) => setRecord((r) => withSolved(r, id))}
         onNext={next ? () => show(next) : null}
         onBack={() => {
