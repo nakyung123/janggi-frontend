@@ -119,11 +119,17 @@ describe("날짜", () => {
     expect(screen.getByText(/^11월 8일 · /)).toBeTruthy();
   });
 
-  it("열어 둔 채 자정을 넘겨도 문제는 바뀌지 않는다", () => {
-    그날연다(한국(2026, 11, 7, 23, 59, 50));
+  it("열어 둔 채 자정을 넘겨도 문제는 바뀌지 않는다 - 다시 그려도, 끝까지 풀어도 앞 날 문제다", () => {
+    const view = 그날연다(한국(2026, 11, 7, 23, 59, 50));
     act(() => vi.advanceTimersByTime(60_000));
+    // 시계만 넘겨서는 화면이 다시 그려지지 않는다. 날짜를 그릴 때마다 읽는 코드면 다시 그리는 순간 바뀐다.
+    view.rerender(<DailyScreen />);
     판이(순서[0]);
     expect(screen.getByText(/^11월 7일 · /)).toBeTruthy();
+    끝까지푼다(순서[0]);
+    expect(알림()).toBe("외통입니다. 풀었습니다.");
+    expect(screen.getByText(/^11월 7일 · /)).toBeTruthy();
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ solved: [순서[0].id] });
   });
 });
 
