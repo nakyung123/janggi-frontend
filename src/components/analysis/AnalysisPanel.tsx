@@ -55,7 +55,7 @@ export function AnalysisPanel({ engineStatus, on, onToggle, snapshot, position, 
             ? "국면을 다 만들면 AI가 봅니다."
             : outcome
               ? playing
-                ? "끝난 국면이라 더 읽지 않습니다. 이전으로 가서 다른 수를 둬 볼 수 있습니다."
+                ? "끝난 국면이라 AI가 더 읽지 않습니다."
                 : outcomeMessage(outcome)
               : cho === null
                 ? "AI가 수를 읽는 중…"
