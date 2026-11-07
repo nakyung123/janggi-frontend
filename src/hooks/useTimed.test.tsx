@@ -98,6 +98,16 @@ describe("도는 중", () => {
     expect(now()).toMatchObject({ solved: 1, misses: 1, missedLast: false, puzzle: 순서[2] });
   });
 
+  it("남은 시간은 타이머가 온 횟수가 아니라 시각으로 센다 - 탭을 숨겨 타이머가 늦게 와도 시계는 간다", () => {
+    // 숨긴 탭에서 크롬은 타이머를 1초에 한 번 이하로 늦추고 폰은 멈춘다. 시각만 60초 옮기고 타이머는
+    // 한 번(200ms)만 오게 한다. 횟수로 세면 179,800 이 남는다.
+    const { now } = 띄운다();
+    act(() => now().start());
+    vi.setSystemTime(Date.now() + 60_000);
+    act(() => vi.advanceTimersByTime(200));
+    expect(now().remainingMs).toBe(119_800);
+  });
+
   it("남은 시간은 흐른 시간만큼 준다", () => {
     const { now } = 띄운다();
     act(() => now().start());
