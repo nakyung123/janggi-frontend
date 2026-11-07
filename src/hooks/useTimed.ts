@@ -118,6 +118,11 @@ export function useTimed(list: readonly MatePuzzle[] = MATES, rand: () => number
   /*
    * 끝나면 한 번 최고 기록을 남긴다. 그리기 전에(useLayoutEffect) 끝 화면으로 넘겨서, 세 번째로
    * 놓친 뒤 다음 문제가 한 번 그려졌다 사라지지 않게 한다.
+   *
+   * 보이는 최고 기록과 "새 기록" 은 저장된 값과 이 화면이 이미 보인 최고(best) 가운데 큰 쪽과
+   * 비교한다. 저장이 막힌 브라우저(사이트 데이터 차단, 저장 공간 참)에서는 다시 읽은 값이 늘 빈
+   * 기록이라, 저장된 값만 보면 둘째 판의 더 낮은 점수를 "새 기록" 이라고 한다. 저장이 되는 브라우저에서는
+   * 저장된 값이 늘 이 화면의 최고 이상이라 결과가 같다.
    */
   useLayoutEffect(() => {
     if (!endNow || !round) return;
@@ -125,9 +130,11 @@ export function useTimed(list: readonly MatePuzzle[] = MATES, rand: () => number
     const stored = readRecord();
     const merged = withBest(stored, round.solved);
     if (merged !== stored) writeStored(TIMED_KEY, merged);
-    setBest(bestOf(merged));
-    setResult({ end: endNow, newBest: merged !== stored });
-  }, [endNow, round]);
+    const known = [bestOf(merged), best].filter((n): n is number => n !== null);
+    const before = Math.max(bestOf(stored) ?? 0, best ?? 0);
+    setBest(known.length > 0 ? Math.max(...known) : null);
+    setResult({ end: endNow, newBest: round.solved > before });
+  }, [endNow, round, best]);
 
   const phase: TimedPhase = round === null ? "ready" : result || endNow ? "over" : "running";
 

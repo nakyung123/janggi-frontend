@@ -204,6 +204,32 @@ describe("최고 기록", () => {
     expect(localStorage.getItem("janggi:mate-solved")).toBe(JSON.stringify({ solved: ["x"] }));
   });
 
+  it("저장이 막힌 브라우저에서도 이 화면에 있는 동안의 최고 기록은 맞게 보이고, 더 낮은 판은 새 기록이 아니다", () => {
+    // 사이트 데이터 저장을 막으면 쓰기가 예외를 던진다. 저장소를 시험 삼아 만지는 safeStore 도 실패해
+    // 읽기는 늘 빈 기록이다.
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("저장 막힘");
+    });
+    const { hook, now } = 띄운다();
+    act(() => now().start());
+    푼다(hook);
+    푼다(hook);
+    for (let i = 0; i < 3; i++) act(() => now().miss());
+    expect(now()).toMatchObject({ solved: 2, best: 2, newBest: true });
+
+    act(() => now().start());
+    푼다(hook);
+    for (let i = 0; i < 3; i++) act(() => now().miss());
+    expect(now()).toMatchObject({ solved: 1, best: 2, newBest: false });
+
+    act(() => now().start());
+    for (let i = 0; i < 3; i++) 푼다(hook);
+    for (let i = 0; i < 3; i++) act(() => now().miss());
+    expect(now()).toMatchObject({ solved: 3, best: 3, newBest: true });
+    expect(localStorage.getItem(KEY)).toBeNull();
+    vi.restoreAllMocks();
+  });
+
   it("하나도 못 풀면 기록을 남기지 않는다", () => {
     const { now } = 띄운다();
     act(() => now().start());
