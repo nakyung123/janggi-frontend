@@ -3,7 +3,8 @@
 // 공격 쪽 수를 받아 정답과 맞춰 보고, 맞으면 잠깐 뒤에 수비의 응수를 둔다. 엔진은 쓰지 않는다 -
 // 둘 수 있는 수와 응수는 문제 데이터(janggi/mates.json)에 있다.
 //
-//   공격 차례 ─ 답이 아닌 수 → 판은 그대로, 알림 줄만 바뀐다(몇 번이든 다시 둔다)
+//   공격 차례 ─ 답이 아닌 수 → 판은 그대로, 알림 줄만 바뀐다(몇 번이든 다시 둔다).
+//            │                 onWrong 을 주면 그것만 부른다(시간 도전: 그 문제를 놓친 것)
 //            └ 정답 ─ 마지막 수였다 → 끝(외통). 정답을 보지 않았으면 onSolve
 //                    └ 아니다 → 0.5초 뒤 주 수순의 응수 → 다시 공격 차례
 //
@@ -73,7 +74,20 @@ export interface MateSolve {
 
 const NO_MOVES: ReadonlySet<string> = new Set();
 
-export function useMateSolve(puzzle: MatePuzzle, onSolve: (id: string) => void): MateSolve {
+export interface MateSolveOptions {
+  /**
+   * 답이 아닌 수를 받았다. 주면 알림 줄을 바꾸지 않고 이것만 부른다 - 시간 도전은 그 문제를 놓친
+   * 것으로 세고 다음 문제로 간다. 주지 않으면 알림 줄만 바뀌고 몇 번이든 다시 둔다(외통 문제).
+   * move 는 기보 표기(73차13).
+   */
+  onWrong?: (move: string) => void;
+}
+
+export function useMateSolve(
+  puzzle: MatePuzzle,
+  onSolve: (id: string) => void,
+  options: MateSolveOptions = {}
+): MateSolve {
   /** 주 수순을 몇 수 뒀는지. 짝수면 공격 차례, 홀수면 응수를 기다린다. 다 두면 끝이다. */
   const [plies, setPlies] = useState(0);
   const [note, setNote] = useState<MateNote>({ kind: "start" });
@@ -112,7 +126,9 @@ export function useMateSolve(puzzle: MatePuzzle, onSolve: (id: string) => void):
     setSelected(null);
     const move = from + to;
     if (move !== puzzle.line[plies]) {
-      setNote({ kind: "wrong", move: describeMove(move, position.board).short });
+      const short = describeMove(move, position.board).short;
+      if (options.onWrong) options.onWrong(short);
+      else setNote({ kind: "wrong", move: short });
       return;
     }
 
