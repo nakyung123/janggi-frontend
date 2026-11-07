@@ -11,6 +11,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../../App";
 import { REPLY_DELAY_MS } from "../../hooks/useMateSolve";
+import { SKIP_GUARD_MS } from "../../hooks/useTimed";
 import type { Position } from "../../janggi/board";
 import type { MatePuzzle } from "../../janggi/mate";
 import { MATES, positionAt } from "../../janggi/mate";
@@ -46,6 +47,14 @@ const 알림 = () => screen.getByRole("status").textContent;
 const 시계 = () => screen.getByRole("timer");
 const 누른다 = (name: string) => fireEvent.click(screen.getByRole("button", { name }));
 const 결과 = () => screen.getByRole("region", { name: "결과" });
+/**
+ * 넘기기를 누른다. 새 문제가 선 뒤 0.3초(SKIP_GUARD_MS)는 단추가 꺼져 있어, 시계를 그보다 조금 넘게(다음
+ * 200ms 타이머까지) 앞당긴 뒤 누른다 - 사람이 문제를 보고 넘기는 것과 같다.
+ */
+function 넘긴다() {
+  act(() => vi.advanceTimersByTime(SKIP_GUARD_MS + 200));
+  누른다("넘기기");
+}
 
 function 칸이름된(pos: Position, square: string): string {
   const piece = pos.board[square];
@@ -137,6 +146,26 @@ describe("도는 중", () => {
     expect(알림()).toBe("앞 문제를 놓쳤습니다. 1수 안에 외통을 거세요.");
   });
 
+  it("넘기기를 빠르게 두 번 눌러도 한 문제만 놓친다 - 새 문제가 선 뒤 0.3초는 넘기기가 꺼져 있다", () => {
+    띄운다();
+    누른다("시작");
+    const 넘기기 = () => screen.getByRole("button", { name: "넘기기" }) as HTMLButtonElement;
+    expect(넘기기().disabled).toBe(true);
+    act(() => vi.advanceTimersByTime(SKIP_GUARD_MS + 200));
+    expect(넘기기().disabled).toBe(false);
+
+    // 첫 누름에 다음 문제가 서고 같은 자리에 새 넘기기가 선다. 곧바로 온 둘째 누름은 그 단추에 닿는다.
+    fireEvent.click(넘기기());
+    fireEvent.click(넘기기());
+    expect(screen.getByText("놓침 1/3")).toBeTruthy();
+    판이(순서[1]);
+    expect(넘기기().disabled).toBe(true);
+
+    act(() => vi.advanceTimersByTime(SKIP_GUARD_MS + 200));
+    fireEvent.click(넘기기());
+    expect(screen.getByText("놓침 2/3")).toBeTruthy();
+  });
+
   it("남은 시간이 흐르고, 마지막 10초는 붉게 선다", () => {
     띄운다();
     누른다("시작");
@@ -154,9 +183,9 @@ describe("끝", () => {
     띄운다();
     누른다("시작");
     푼다(순서[0]);
-    누른다("넘기기");
-    누른다("넘기기");
-    누른다("넘기기");
+    넘긴다();
+    넘긴다();
+    넘긴다();
     expect(결과().textContent).toContain("1개 풀었습니다");
     expect(within(결과()).getByText("세 번 놓쳤습니다.")).toBeTruthy();
     expect(within(결과()).getByText(/^최고 기록 1개/).textContent).toBe("최고 기록 1개 · 새 기록입니다.");
@@ -181,14 +210,14 @@ describe("끝", () => {
     누른다("시작");
     푼다(순서[0]);
     푼다(순서[1]);
-    for (let i = 0; i < 3; i++) 누른다("넘기기");
+    for (let i = 0; i < 3; i++) 넘긴다();
     first.unmount();
 
     render(<TimedScreen />);
     expect(screen.getByText("최고 기록 2개")).toBeTruthy();
     누른다("시작");
     푼다(순서[0]);
-    for (let i = 0; i < 3; i++) 누른다("넘기기");
+    for (let i = 0; i < 3; i++) 넘긴다();
     expect(결과().textContent).toContain("1개 풀었습니다");
     expect(within(결과()).getByText("최고 기록 2개").textContent).toBe("최고 기록 2개");
     expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ best: { "180s-3miss": 2 } });
@@ -212,7 +241,7 @@ describe("끝", () => {
     expect(localStorage.getItem(KEY)).toBe(bad);
     누른다("시작");
     푼다(순서[0]);
-    for (let i = 0; i < 3; i++) 누른다("넘기기");
+    for (let i = 0; i < 3; i++) 넘긴다();
     expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ best: { "180s-3miss": 1 } });
     expect(localStorage.getItem("janggi:mate-solved")).toBe(JSON.stringify({ solved: [MATES[0].id] }));
     expect(localStorage.getItem("janggi:flipped")).toBe("true");
