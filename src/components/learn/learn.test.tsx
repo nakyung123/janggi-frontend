@@ -13,11 +13,18 @@ import "../../test/browser";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../../App";
-import type { Square } from "../../janggi/board";
+import type { Board as BoardMap, Square } from "../../janggi/board";
 import { pieceMoves } from "../../janggi/moves";
 import { toJanggiCoord } from "../../janggi/notation";
+import { OPENINGS, positionAt } from "../../janggi/openings";
+import { SIDE_LABEL, pieceInfo, sideOf } from "../../janggi/pieces";
+import { SETUPS } from "../../janggi/setups";
 import { FakeEngine } from "../../test/fakeEngine";
 import { CoordsScreen } from "./CoordsScreen";
+import { OpeningsScreen } from "./OpeningsScreen";
+import type { ListItem } from "./readings";
+import { READINGS } from "./readings";
+import { ReadingsScreen } from "./ReadingsScreen";
 import { PIECE_LESSONS } from "./pieceScenes";
 import { PiecesScreen } from "./PiecesScreen";
 import { RulesScreen } from "./RulesScreen";
@@ -50,7 +57,7 @@ function 배우기항목(menu: HTMLElement) {
     .map((b) => b.textContent);
 }
 
-const 배우기화면 = ["기물", "규칙", "용어", "좌표"];
+const 배우기화면 = ["기물", "규칙", "용어", "좌표", "포진", "읽을거리"];
 
 describe("메뉴", () => {
   it("왼쪽 메뉴와 폰 메뉴 둘 다 배우기 묶음 아래에 배우기 화면이 이 순서로 선다", async () => {
@@ -342,6 +349,212 @@ describe("좌표 화면", () => {
     render(<CoordsScreen />);
     for (const 예 of ["73졸63", "43병53", "12마33", "95궁85"]) {
       expect(screen.getByText(예)).toBeTruthy();
+    }
+  });
+});
+
+// --- 포진 화면 ---------------------------------------------------------------
+
+/** 판 위 기물이 선 칸의 이름("84 초 마" 꼴)들. 빈 칸은 이름에 기물이 없다. */
+const 판기물 = () =>
+  screen
+    .getAllByRole("gridcell")
+    .map((c) => c.getAttribute("aria-label")!)
+    .filter((n) => n.includes(" "))
+    .sort();
+/** 데이터의 판이 화면에 그려지면 나올 이름들. */
+const 기대기물 = (board: BoardMap) =>
+  Object.entries(board)
+    .map(([s, p]) => `${toJanggiCoord(s)} ${SIDE_LABEL[sideOf(p)]} ${pieceInfo(p).name}`)
+    .sort();
+const 포진고르기 = (name: string) =>
+  fireEvent.click(within(screen.getByRole("group", { name: "포진" })).getByRole("button", { name }));
+const 지금수 = () => document.querySelector(".opening-step")!.textContent;
+const 단추 = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
+
+describe("포진 화면", () => {
+  it.each(OPENINGS.map((o) => [o.name, o] as const))(
+    "%s - 열면 완성 모양이고, 처음으로 가서 다음으로 끝까지 가는 동안 판이 데이터의 국면과 같다",
+    (name, o) => {
+      render(<OpeningsScreen />);
+      포진고르기(name);
+      expect(screen.getByRole("heading", { level: 3, name: `${name} 포진` })).toBeTruthy();
+      for (const line of o.lines) {
+        if (o.lines.length > 1) {
+          fireEvent.click(within(screen.getByRole("group", { name: "차림" })).getByRole("button", { name: line.setup }));
+        }
+        const n = line.moves.length;
+        expect(판기물()).toEqual(기대기물(positionAt(line, n).board));
+        expect(지금수()).toMatch(new RegExp(`^${n}/${n} · .+ · 완성$`));
+        expect(단추("다음").disabled).toBe(true);
+        expect(단추("끝으로").disabled).toBe(true);
+
+        fireEvent.click(단추("처음으로"));
+        expect(지금수()).toBe(`0/${n} · 처음 차림`);
+        expect(판기물()).toEqual(기대기물(positionAt(line, 0).board));
+        expect(단추("이전").disabled).toBe(true);
+        expect(단추("처음으로").disabled).toBe(true);
+
+        for (let step = 1; step <= n; step++) {
+          fireEvent.click(단추("다음"));
+          expect(판기물()).toEqual(기대기물(positionAt(line, step).board));
+        }
+        expect(지금수()).toMatch(/ · 완성$/);
+        fireEvent.click(단추("이전"));
+        expect(판기물()).toEqual(기대기물(positionAt(line, n - 1).board));
+      }
+    }
+  );
+
+  /*
+   * 지금 수는 이 앱의 기보 표기로 적는다. 양귀마는 수 순서도 본다 - 협회 뜻("귀에 마 둘을 놓은 뒤
+   * 가운데 졸을 한 칸")대로 졸이 맨 뒤다. 조사 시험의 순서(졸 먼저)로 돌아가면 여기서 잡는다.
+   */
+  it.each([
+    ["원앙마", ["1/4 · 75졸74", "2/4 · 02마83", "3/4 · 08마87", "4/4 · 83마75 · 완성"]],
+    ["양귀마", ["1/3 · 03마84", "2/3 · 07마86", "3/3 · 75졸65 · 완성"]],
+  ])("지금 수는 이 앱의 기보 표기로 적는다(%s)", (name, expected) => {
+    render(<OpeningsScreen />);
+    포진고르기(name);
+    fireEvent.click(단추("처음으로"));
+    const seen = expected.map(() => {
+      fireEvent.click(단추("다음"));
+      return 지금수();
+    });
+    expect(seen).toEqual(expected);
+  });
+
+  it("한 칸 오가면 기물이 날아간다 - 다음은 그 수대로, 이전은 거꾸로. 처음·끝으로 건너뛰면 날지 않는다", () => {
+    render(<OpeningsScreen />);
+    포진고르기("원앙마");
+    /** 날아오는 기물이 선 칸들(판이 도착 칸의 기물 안에 .fly 를 그린다). */
+    const 나는칸 = () => [...document.querySelectorAll("[data-piece]")].filter((g) => g.querySelector(".fly")).map((g) => g.getAttribute("data-piece"));
+    fireEvent.click(단추("처음으로"));
+    expect(나는칸()).toEqual([]);
+    fireEvent.click(단추("다음")); // 75졸74 = e4d4
+    expect(나는칸()).toEqual(["d4"]);
+    fireEvent.click(단추("이전")); // 74 의 졸이 75 로 돌아간다
+    expect(나는칸()).toEqual(["e4"]);
+    fireEvent.click(단추("끝으로"));
+    expect(나는칸()).toEqual([]);
+  });
+
+  it("차림 고르기는 차림이 둘 이상인 귀마·면상에만 있다", () => {
+    render(<OpeningsScreen />);
+    const 차림 = () =>
+      screen.queryByRole("group", { name: "차림" })
+        ? within(screen.getByRole("group", { name: "차림" })).getAllByRole("button").map((b) => b.textContent)
+        : null;
+    const seen = OPENINGS.map((o) => {
+      포진고르기(o.name);
+      return [o.name, 차림()];
+    });
+    expect(seen).toEqual([
+      ["귀마", ["마상마상", "상마상마"]],
+      ["원앙마", null],
+      ["면상", ["상마마상", "마상마상", "상마상마"]],
+      ["양귀마", null],
+      ["양귀상", null],
+    ]);
+  });
+
+  it("도중에 다른 포진이나 차림을 고르면 그 완성 모양이 선다", () => {
+    render(<OpeningsScreen />);
+    포진고르기("면상");
+    fireEvent.click(단추("처음으로"));
+    fireEvent.click(within(screen.getByRole("group", { name: "차림" })).getByRole("button", { name: "마상마상" }));
+    expect(지금수()).toBe("2/2 · 08상85 · 완성");
+    fireEvent.click(단추("처음으로"));
+    포진고르기("양귀상");
+    expect(지금수()).toBe("5/5 · 07상84 · 완성");
+  });
+
+  it("차림 줄은 데이터에서 만든다 - 차림 이름과 수", () => {
+    render(<OpeningsScreen />);
+    const seen = OPENINGS.map((o) => {
+      포진고르기(o.name);
+      return screen.getAllByText(/에서 \d수에 됩니다\.$/).map((p) => p.textContent);
+    });
+    expect(seen).toEqual([
+      ["마상마상·상마상마에서 1수에 됩니다."],
+      ["마상상마에서 4수에 됩니다."],
+      ["상마마상·마상마상·상마상마에서 2수에 됩니다."],
+      ["상마마상에서 3수에 됩니다."],
+      ["마상상마에서 5수에 됩니다."],
+    ]);
+  });
+
+  it("정석이 아니라는 말이 늘 보이고, 판의 기물은 집히지 않는다", () => {
+    render(<OpeningsScreen />);
+    for (const o of OPENINGS) {
+      포진고르기(o.name);
+      expect(screen.getByText(/^모양 만드는 수는 정석이 아니고, 상대가 가만히 있다고 친 길입니다\./)).toBeTruthy();
+    }
+    /*
+     * 집히지 않는 기물에는 판이 fixed 를 붙인다(Board.tsx). 붙지 않으면 손 모양 커서가 서고, 끌면
+     * 기물이 손을 따라오며, 폰에서 기물을 밀어 쪽을 굴릴 수 없다. 판이 그대로인지만 보면 이것을
+     * 놓친다 - 화면은 옮기는 수를 받아도 아무 일도 하지 않는다.
+     */
+    const 안고정 = () => [...document.querySelectorAll("[data-piece]")].filter((g) => !g.classList.contains("fixed"));
+    for (const o of OPENINGS) {
+      포진고르기(o.name);
+      expect([o.name, "완성", document.querySelectorAll("[data-piece]").length, 안고정()]).toEqual([o.name, "완성", 32, []]);
+      fireEvent.click(단추("처음으로"));
+      expect([o.name, "처음", 안고정()]).toEqual([o.name, "처음", []]);
+    }
+    const before = 판기물();
+    // 마지막에 고른 양귀상은 마상상마 차림이다. 02 의 마는 83 으로 갈 수 있는 기물이다.
+    fireEvent.pointerUp(screen.getByRole("gridcell", { name: "02 초 마" }));
+    fireEvent.pointerUp(screen.getByRole("gridcell", { name: "83" }));
+    끌기("b1", "c3");
+    expect(판기물()).toEqual(before);
+  });
+});
+
+// --- 읽을거리 화면 -------------------------------------------------------------
+
+describe("읽을거리 화면", () => {
+  it("목록에 글 제목이 서고, 누르면 그 글이, 목록으로를 누르면 목록이 선다", () => {
+    render(<ReadingsScreen />);
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "상차림 넷은 무엇이 다른가요",
+      "졸은 둘씩 붙여 둡니다",
+    ]);
+    for (const r of READINGS) {
+      fireEvent.click(screen.getByRole("button", { name: r.title }));
+      expect(screen.getByRole("heading", { level: 2, name: r.title })).toBeTruthy();
+      expect(screen.queryByRole("heading", { level: 2, name: "읽을거리" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "목록으로" }));
+      expect(screen.getByRole("heading", { level: 2, name: "읽을거리" })).toBeTruthy();
+    }
+  });
+
+  it("글의 문단과 점 목록이 데이터 순서대로 다 선다. 점 목록 줄 앞의 굵은 말도 선다", () => {
+    render(<ReadingsScreen />);
+    for (const r of READINGS) {
+      fireEvent.click(screen.getByRole("button", { name: r.title }));
+      const card = document.querySelector(".learn-reading")!;
+      const expected = r.blocks.flatMap((b) =>
+        "p" in b ? [b.p] : b.list.map((i: ListItem) => (i.lead ? `${i.lead}: ${i.text}` : i.text))
+      );
+      expect([...card.querySelectorAll("p, li")].map((e) => e.textContent)).toEqual(expected);
+      fireEvent.click(screen.getByRole("button", { name: "목록으로" }));
+    }
+  });
+
+  /*
+   * 글 1 의 차림 세 줄이 말하는 "이어지기 쉬운 포진" 은 포진 화면의 데이터(그 차림의 수순이 있는
+   * 포진)와 같아야 한다. 한쪽만 고치면 두 화면이 다른 말을 한다.
+   */
+  it("글 1 의 차림 세 줄 - 차림 넷이 한 번씩 나오고, 이어지기 쉬운 포진이 포진 데이터와 같다", () => {
+    const rows = READINGS[0].blocks.flatMap((b) => ("list" in b ? b.list.filter((i) => i.lead) : []));
+    expect(rows.flatMap((i) => i.lead!.split(" · ")).sort()).toEqual(SETUPS.map((s) => s.name).sort());
+    for (const row of rows) {
+      const said = [...row.text.matchAll(/(\S+) 포진/g)].map((m) => m[1]).sort();
+      for (const setup of row.lead!.split(" · ")) {
+        const data = OPENINGS.filter((o) => o.lines.some((l) => l.setup === setup)).map((o) => o.name).sort();
+        expect([setup, said]).toEqual([setup, data]);
+      }
     }
   });
 });
