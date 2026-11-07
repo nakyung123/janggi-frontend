@@ -878,3 +878,138 @@ describe("깔때기 숫자", () => {
     expect(보낸횟수("first_move")).toBe(1);
   });
 });
+
+// --- 분석판 ------------------------------------------------------------------
+
+/*
+ * 분석판은 메뉴 화면이지만 엔진을 쓴다. 엔진은 하나라 App 이 대국과 나눠 쓴다
+ * (hooks/useAnalysisBoard 머리 주석). 여기서는 셋을 본다.
+ *   - 잘못된 국면은 엔진에 묻지 않는다(엔진은 궁 없는 판에도, 궁을 잡는 수에도 답한다)
+ *   - 분석판을 오가도 대국 탭의 판·시계·엔진 설정이 그대로다
+ *   - 늦게 온 분석 결과가 바뀐 국면에 서지 않는다
+ */
+describe("분석판", () => {
+  const 메뉴 = (name: string) => fireEvent.click(screen.getAllByRole("button", { name })[0]);
+  const 단추 = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
+  /** 만들기에서 빈 자리를 누른다. */
+  const 빈자리 = (square: string) =>
+    fireEvent.pointerUp(document.querySelector(`.hit[data-square="${square}"]`)!);
+  /** 만들기에서 기물이 있는 자리를 누른다(기물을 집지 않는 도구일 때). */
+  const 기물자리 = (square: string) => {
+    fireEvent.pointerDown(piece(square)!, { ...pointOf(square), pointerId: 1 });
+    fireEvent.pointerUp(document.querySelector("svg.board")!, { ...pointOf(square), pointerId: 1 });
+  };
+  const 고칠것 = () => document.querySelector(".analysis-problems")?.textContent ?? "";
+  const 추천수 = () => document.querySelectorAll(".analysis-lines li");
+  const 화살표 = () => document.querySelector("svg.board line.best-arrow");
+  /** 판(첫 단)만 보고 만든 국면의 열쇠. 분석판의 시작 국면은 toFen 으로 만든다. */
+  const 물은국면 = (board: string) => engine().probes.filter((k) => k.startsWith(board + " "));
+  const 시계들 = () => Array.from(document.querySelectorAll(".player-clock b")).map((b) => b.textContent);
+  const 자리들 = () =>
+    Array.from(document.querySelectorAll("[data-piece]"))
+      .map((g) => g.getAttribute("data-piece"))
+      .sort()
+      .join(",");
+
+  it("잘못된 국면은 엔진에 묻지 않고 까닭을 보인다. 고치면 그때 묻는다", async () => {
+    await start();
+    메뉴("분석판");
+    fireEvent.click(단추("빈 판"));
+    expect(고칠것()).toContain("초의 궁이 없습니다.");
+    expect(고칠것()).toContain("한의 궁이 없습니다.");
+    expect(단추("두어 보기").disabled).toBe(true);
+
+    // 놓을 때 막는 것: 궁성 밖의 궁은 놓이지 않고 그 자리에서 까닭을 말한다.
+    fireEvent.click(단추("궁"));
+    빈자리("e5");
+    expect(piece("e5")).toBeNull();
+    expect(screen.getByText("궁은 궁성 안에만 놓을 수 있습니다.")).toBeTruthy();
+
+    // 초 차례인데 초의 차가 한의 궁을 겨눈다. 엔진은 여기서 궁을 잡는 수를 내놓는다.
+    빈자리("d2");
+    fireEvent.click(단추("한 기물"));
+    fireEvent.click(단추("궁"));
+    빈자리("e10");
+    fireEvent.click(단추("초 기물"));
+    fireEvent.click(단추("차"));
+    빈자리("e1");
+    expect(piece("e1")).not.toBeNull();
+    expect(고칠것()).toContain("초 차례인데 한의 궁이 장군을 받고 있습니다.");
+
+    // 엔진이 묻는 데 0.06초, 탐색에 0.18초를 기다린다. 그보다 넉넉히 기다려도 묻지 않는다.
+    await new Promise((r) => setTimeout(r, 400));
+    expect(물은국면("9/9/9/9/9/9/9/9/9/9")).toHaveLength(0);
+    expect(물은국면("4k4/9/9/9/9/9/9/9/3K5/4R4")).toHaveLength(0);
+    expect(engine().searches.filter((k) => k.startsWith("4k4/9/9/9/9/9/9/9/3K5/4R4 "))).toHaveLength(0);
+
+    // 둘 차례를 한으로 바꾸면 맞는 국면이 되어 그때 묻는다.
+    fireEvent.click(within(screen.getByRole("group", { name: "둘 차례" })).getByRole("button", { name: "한" }));
+    expect(고칠것()).toBe("");
+    await waitFor(() => expect(물은국면("4k4/9/9/9/9/9/9/9/3K5/4R4")).not.toHaveLength(0));
+    expect(단추("두어 보기").disabled).toBe(false);
+  });
+
+  it("분석판을 오가도 대국 탭의 판·시계·엔진 설정이 그대로이고, 엔진 차례였으면 돌아와서 둔다", async () => {
+    await start();
+    drag("c4", "c5");
+    await engineReply(1);
+    expect(engine().getOptions()).toMatchObject({ multiPV: 1, variant: "janggi", skill: 20 });
+
+    // 엔진이 생각하는 동안(0.6초) 분석판으로 간다.
+    engine().searchMs = 600;
+    await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
+    const 앞탐색 = engine().searches.length;
+    drag("g4", "g5");
+    await waitFor(() => expect(engine().searches.length).toBeGreaterThan(앞탐색));
+    const 떠날때시계 = 시계들();
+    const 떠날때판 = 자리들();
+    메뉴("분석판");
+    await waitFor(() => expect(engine().getOptions()).toMatchObject({ multiPV: 3, skill: 20 }));
+
+    // 분석판의 규칙을 바꾸면 그 규칙이 걸린다.
+    fireEvent.click(screen.getByRole("combobox", { name: /규칙/ }));
+    fireEvent.click(screen.getByRole("option", { name: /현대/ }));
+    await waitFor(() => expect(engine().getOptions().variant).toBe("janggimodern"));
+
+    // 엔진은 분석판에 있는 동안 대국 판에 두지 않는다(엔진 차례의 탐색이 끊긴다). 분석판의 탐색은
+    // 답을 내지만 그것은 분석판 국면의 것이라 대국 판에 서지 않는다 - 판은 아래에서 본다.
+    await new Promise((r) => setTimeout(r, 1500));
+
+    메뉴("대국");
+    // 돌아오면 대국 설정(MultiPV 1·대국 규칙·급수 실력)이 걸리고, 판과 시계는 떠날 때 그대로다.
+    await waitFor(() => expect(engine().getOptions()).toMatchObject({ multiPV: 1, variant: "janggi", skill: -7 }));
+    expect(piece("c5")).not.toBeNull();
+    expect(piece("g5")).not.toBeNull();
+    expect(시계들()).toEqual(떠날때시계);
+
+    // 엔진이 이어서 둔다 - 판의 기물 자리가 떠날 때와 달라진다. 분석판의 탐색도 가짜 엔진의 답(answers)을
+    // 남기므로 그 수로 세지 않고 판으로 본다.
+    expect(자리들()).toBe(떠날때판);
+    await waitFor(() => expect(자리들()).not.toBe(떠날때판), { timeout: 3000 });
+    await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
+    expect(engine().getOptions()).toMatchObject({ multiPV: 1, variant: "janggi", skill: 20 });
+  });
+
+  it("늦게 온 분석 결과는 바뀐 국면에 서지 않는다", async () => {
+    await start();
+    engine().holdSearch = true;
+    메뉴("분석판");
+    // 처음 차림을 읽기 시작한다(답은 붙잡혀 있다).
+    await waitFor(() => expect(engine().heldSearches).toBe(1));
+
+    // 졸 하나를 빼서 국면을 바꾼 뒤, 앞 국면의 답을 푼다.
+    fireEvent.click(단추("빼기"));
+    기물자리("a4");
+    expect(piece("a4")).toBeNull();
+    act(() => engine().releaseSearches());
+
+    expect(추천수()).toHaveLength(0);
+    expect(화살표()).toBeNull();
+
+    // 새 국면의 답은 선다. 1번 수는 가짜 엔진이 그 국면의 합법수 앞에서 고른 것이다.
+    await waitFor(() => expect(추천수()).toHaveLength(3));
+    expect(화살표()).not.toBeNull();
+    const 새국면 = engine().searches[engine().searches.length - 1];
+    expect(새국면.startsWith("rnba1abnr/4k4/1c5c1/p1p1p1p1p/9/9/2P1P1P1P/")).toBe(true);
+  });
+});
