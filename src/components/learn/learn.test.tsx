@@ -18,9 +18,13 @@ import { pieceMoves } from "../../janggi/moves";
 import { toJanggiCoord } from "../../janggi/notation";
 import { OPENINGS, positionAt } from "../../janggi/openings";
 import { SIDE_LABEL, pieceInfo, sideOf } from "../../janggi/pieces";
+import { SETUPS } from "../../janggi/setups";
 import { FakeEngine } from "../../test/fakeEngine";
 import { CoordsScreen } from "./CoordsScreen";
 import { OpeningsScreen } from "./OpeningsScreen";
+import type { ListItem } from "./readings";
+import { READINGS } from "./readings";
+import { ReadingsScreen } from "./ReadingsScreen";
 import { PIECE_LESSONS } from "./pieceScenes";
 import { PiecesScreen } from "./PiecesScreen";
 import { RulesScreen } from "./RulesScreen";
@@ -53,7 +57,7 @@ function 배우기항목(menu: HTMLElement) {
     .map((b) => b.textContent);
 }
 
-const 배우기화면 = ["기물", "규칙", "용어", "좌표", "포진"];
+const 배우기화면 = ["기물", "규칙", "용어", "좌표", "포진", "읽을거리"];
 
 describe("메뉴", () => {
   it("왼쪽 메뉴와 폰 메뉴 둘 다 배우기 묶음 아래에 배우기 화면이 이 순서로 선다", async () => {
@@ -471,5 +475,53 @@ describe("포진 화면", () => {
     fireEvent.pointerUp(screen.getByRole("gridcell", { name: "83" }));
     끌기("b1", "c3");
     expect(판기물()).toEqual(before);
+  });
+});
+
+// --- 읽을거리 화면 -------------------------------------------------------------
+
+describe("읽을거리 화면", () => {
+  it("목록에 글 제목이 서고, 누르면 그 글이, 목록으로를 누르면 목록이 선다", () => {
+    render(<ReadingsScreen />);
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "상차림 넷은 무엇이 다른가요",
+      "졸은 둘씩 붙여 둡니다",
+    ]);
+    for (const r of READINGS) {
+      fireEvent.click(screen.getByRole("button", { name: r.title }));
+      expect(screen.getByRole("heading", { level: 2, name: r.title })).toBeTruthy();
+      expect(screen.queryByRole("heading", { level: 2, name: "읽을거리" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "목록으로" }));
+      expect(screen.getByRole("heading", { level: 2, name: "읽을거리" })).toBeTruthy();
+    }
+  });
+
+  it("글의 문단과 점 목록이 데이터 순서대로 다 선다. 점 목록 줄 앞의 굵은 말도 선다", () => {
+    render(<ReadingsScreen />);
+    for (const r of READINGS) {
+      fireEvent.click(screen.getByRole("button", { name: r.title }));
+      const card = document.querySelector(".learn-reading")!;
+      const expected = r.blocks.flatMap((b) =>
+        "p" in b ? [b.p] : b.list.map((i: ListItem) => (i.lead ? `${i.lead}: ${i.text}` : i.text))
+      );
+      expect([...card.querySelectorAll("p, li")].map((e) => e.textContent)).toEqual(expected);
+      fireEvent.click(screen.getByRole("button", { name: "목록으로" }));
+    }
+  });
+
+  /*
+   * 글 1 의 차림 세 줄이 말하는 "이어지기 쉬운 포진" 은 포진 화면의 데이터(그 차림의 수순이 있는
+   * 포진)와 같아야 한다. 한쪽만 고치면 두 화면이 다른 말을 한다.
+   */
+  it("글 1 의 차림 세 줄 - 차림 넷이 한 번씩 나오고, 이어지기 쉬운 포진이 포진 데이터와 같다", () => {
+    const rows = READINGS[0].blocks.flatMap((b) => ("list" in b ? b.list.filter((i) => i.lead) : []));
+    expect(rows.flatMap((i) => i.lead!.split(" · ")).sort()).toEqual(SETUPS.map((s) => s.name).sort());
+    for (const row of rows) {
+      const said = [...row.text.matchAll(/(\S+) 포진/g)].map((m) => m[1]).sort();
+      for (const setup of row.lead!.split(" · ")) {
+        const data = OPENINGS.filter((o) => o.lines.some((l) => l.setup === setup)).map((o) => o.name).sort();
+        expect([setup, said]).toEqual([setup, data]);
+      }
+    }
   });
 });

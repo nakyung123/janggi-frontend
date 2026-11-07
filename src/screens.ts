@@ -16,6 +16,7 @@
 import type { ComponentType } from "react";
 import { CoordsScreen } from "./components/learn/CoordsScreen";
 import { OpeningsScreen } from "./components/learn/OpeningsScreen";
+import { ReadingsScreen } from "./components/learn/ReadingsScreen";
 import { PiecesScreen } from "./components/learn/PiecesScreen";
 import { RulesScreen } from "./components/learn/RulesScreen";
 import { TermsScreen } from "./components/learn/TermsScreen";
@@ -59,6 +60,7 @@ const list = [
   { id: "terms", group: "learn", label: "용어", Component: TermsScreen },
   { id: "coords", group: "learn", label: "좌표", Component: CoordsScreen },
   { id: "openings", group: "learn", label: "포진", Component: OpeningsScreen },
+  { id: "readings", group: "learn", label: "읽을거리", Component: ReadingsScreen },
   { id: "games", group: "record", label: "기보" },
   { id: "stats", group: "record", label: "내 전적", Component: StatsScreen },
 ] as const satisfies readonly Screen[];

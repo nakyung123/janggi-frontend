@@ -204,6 +204,36 @@
   margin-top: 12px;
 }
 
+/*
+ * 읽을거리 목록의 글 제목 줄. 외통 문제 목록의 줄(mate.css 의 .mate-item)처럼 테두리 없는 48 줄이고,
+ * 줄의 안쪽 여백(12)만큼 바깥으로 내밀어 글자의 왼쪽 끝을 카드의 다른 글자에 맞춘다. 제목이 길어
+ * 두 줄로 넘어가도 왼쪽에 붙는다.
+ */
+.learn-reading-list {
+  list-style: none;
+  margin: 0 -12px;
+}
+
+.learn-reading-item {
+  width: 100%;
+  min-height: 48px;
+  padding: 4px 12px;
+  justify-content: flex-start;
+  text-align: left;
+  font-weight: 400;
+}
+
+/* 글 하나. 문단과 점 목록 사이 12. */
+.learn-reading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.learn-reading .learn-list {
+  margin-top: 0;
+}
+
 /* 설명 카드: 기물 그림(초·한) + 이름, 그 아래 한쪽 수와 점수. */
 .learn-piece-head {
   display: flex;
