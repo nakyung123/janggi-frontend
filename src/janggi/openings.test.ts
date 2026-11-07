@@ -17,7 +17,7 @@ import type { Board, Position } from "./board";
 import { toFen } from "./board";
 import type { Opening, OpeningId } from "./openings";
 import { OPENINGS, passOf, positionAt, startOf } from "./openings";
-import { SETUPS } from "./setups";
+import { SETUPS, detectSetup } from "./setups";
 
 // --- 엔진 ------------------------------------------------------------------------
 
@@ -160,6 +160,22 @@ const lineOf = (id: OpeningId, setup?: string) => {
 
 const clone = () => structuredClone(OPENINGS) as Opening[];
 
+describe("데이터 - 처음 판", () => {
+  // 화면 판과 엔진에 넘기는 FEN 이 둘 다 startOf 에서 나와서, 위 엔진 시험은 한의 차림이 틀려도 잡지 못한다.
+  it("수순마다 처음 판의 초와 한이 둘 다 그 차림이다(한의 차림은 초와 같다)", () => {
+    for (const o of OPENINGS) {
+      for (const line of o.lines) {
+        const { board } = startOf(line);
+        expect([o.name, detectSetup(board, "cho")?.name, detectSetup(board, "han")?.name]).toEqual([
+          o.name,
+          line.setup,
+          line.setup,
+        ]);
+      }
+    }
+  });
+});
+
 describe("데이터 - 앱의 엔진과 같다(세 규칙)", () => {
   let engine: Engine;
   beforeAll(async () => {
@@ -200,6 +216,15 @@ describe("데이터 - 앱의 엔진과 같다(세 규칙)", () => {
     list[0].lines[0].moves[1] = "i1i2";
     expect(await problemsOf(list, engine)).toEqual(
       VARIANTS.map((v) => `양귀마(상마마상) ${v}: 끝 국면이 양귀마 모양이 아님`)
+    );
+  }, 30_000);
+
+  it("망가뜨린 사본 4 - 양귀상에서 상을 먼저 두면 합법수가 아니라고 잡는다(사·궁이 길을 막고 있다)", async () => {
+    const list = clone().filter((o) => o.id === "yanggwisang");
+    const moves = list[0].lines[0].moves;
+    list[0].lines[0].moves = [moves[3], ...moves.slice(0, 3), moves[4]];
+    expect(await problemsOf(list, engine)).toEqual(
+      VARIANTS.map((v) => `양귀상(마상상마) ${v} 1째 수: c1f3 는 합법수가 아님`)
     );
   }, 30_000);
 
