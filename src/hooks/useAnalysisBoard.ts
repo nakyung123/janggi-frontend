@@ -121,7 +121,7 @@ interface Options {
   engineStatus: EngineStatus;
   /** 대국 탭에서 보는 국면. [대국 판]이 가져온다. */
   playFen: string;
-  /** 분석판 규칙의 처음 값(대국 탭 규칙). */
+  /** 대국 탭 규칙. 분석판에서 규칙을 고르기 전에는 이 규칙을 쓴다. */
   defaultVariant: Variant;
 }
 
@@ -149,7 +149,13 @@ export function useAnalysisBoard(options: Options): AnalysisBoard {
   const [selected, setSelected] = useState<Square | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [flipped, setFlipped] = useState(false);
-  const [variant, setVariantState] = useState<Variant>(defaultVariant);
+  /**
+   * 분석판에서 고른 규칙. 고르기 전(null)에는 대국 탭 규칙을 따라간다 - 이 훅은 앱이 뜰 때부터
+   * 돌아서, 처음 값으로 굳히면 앱을 연 뒤 대국 탭에서 바꾼 규칙을 모른다. 저장하지 않으므로
+   * 새로고침하면 다시 따라간다.
+   */
+  const [picked, setPicked] = useState<Variant | null>(null);
+  const variant = picked ?? defaultVariant;
   const [analysisOn, setAnalysisOn] = useState(true);
   const [fly, setFly] = useState<{
     from: Square;
@@ -406,7 +412,7 @@ export function useAnalysisBoard(options: Options): AnalysisBoard {
     flip: () => setFlipped((f) => !f),
     problems,
     variant,
-    setVariant: setVariantState,
+    setVariant: setPicked,
     cursor,
     last: history.length - 1,
     goTo,

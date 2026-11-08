@@ -883,9 +883,10 @@ describe("깔때기 숫자", () => {
 
 /*
  * 분석판은 메뉴 화면이지만 엔진을 쓴다. 엔진은 하나라 App 이 대국과 나눠 쓴다
- * (hooks/useAnalysisBoard 머리 주석). 여기서는 셋을 본다.
+ * (hooks/useAnalysisBoard 머리 주석). 여기서는 넷을 본다.
  *   - 잘못된 국면은 엔진에 묻지 않는다(엔진은 궁 없는 판에도, 궁을 잡는 수에도 답한다)
  *   - 분석판을 오가도 대국 탭의 판·시계·엔진 설정이 그대로다
+ *   - 분석판 규칙은 고르기 전에는 대국 탭 규칙을 따라간다
  *   - 늦게 온 분석 결과가 바뀐 국면에 서지 않는다
  */
 describe("분석판", () => {
@@ -988,6 +989,33 @@ describe("분석판", () => {
     await waitFor(() => expect(자리들()).not.toBe(떠날때판), { timeout: 3000 });
     await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
     expect(engine().getOptions()).toMatchObject({ multiPV: 1, variant: "janggi", skill: 20 });
+  });
+
+  it("분석판 규칙은 고르기 전에는 대국 탭 규칙을 따라가고, 고른 뒤에는 따로 둔다", async () => {
+    const 규칙칸 = (scope: HTMLElement) => within(scope).getByRole("combobox", { name: /규칙/ });
+    const 규칙고르기 = (scope: HTMLElement, name: RegExp) => {
+      fireEvent.click(규칙칸(scope));
+      fireEvent.click(screen.getByRole("option", { name }));
+    };
+    const 대국패널 = () => document.querySelector(".panel.play") as HTMLElement;
+    await start();
+
+    // 앱을 연 뒤 대국 탭에서 규칙을 바꾸고(첫 수 전) 분석판을 처음 연다.
+    규칙고르기(대국패널(), /현대/);
+    await waitFor(() => expect(engine().getOptions().variant).toBe("janggimodern"));
+    메뉴("분석판");
+    expect(규칙칸(document.body).textContent).toContain("현대");
+    await waitFor(() => expect(engine().getOptions()).toMatchObject({ multiPV: 3, variant: "janggimodern" }));
+
+    // 분석판에서 고르면, 그 뒤로 대국 탭 규칙을 바꿔도 분석판은 고른 규칙 그대로다.
+    규칙고르기(document.body, /전통/);
+    await waitFor(() => expect(engine().getOptions().variant).toBe("janggitraditional"));
+    메뉴("대국");
+    규칙고르기(대국패널(), /표준/);
+    await waitFor(() => expect(engine().getOptions()).toMatchObject({ multiPV: 1, variant: "janggi" }));
+    메뉴("분석판");
+    expect(규칙칸(document.body).textContent).toContain("전통");
+    await waitFor(() => expect(engine().getOptions()).toMatchObject({ multiPV: 3, variant: "janggitraditional" }));
   });
 
   it("늦게 온 분석 결과는 바뀐 국면에 서지 않는다", async () => {
