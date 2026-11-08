@@ -990,7 +990,9 @@ describe("분석판", () => {
     await waitFor(() => expect(자리들()).not.toBe(떠날때판), { timeout: 3000 });
     await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
     expect(engine().getOptions()).toMatchObject({ multiPV: 1, variant: "janggi", skill: 20 });
-  });
+    // 엔진 생각(0.6초)과 분석판에서 기다리는 1.5초가 들어 있어 평소 4.5초쯤 걸린다. 기본 제한
+    // 5초로는 기계가 바쁠 때 넘친다.
+  }, 15_000);
 
   it("국면은 그대로 두고 규칙만 바꿔도 합법수를 새 규칙으로 다시 묻는다", async () => {
     // 합법수는 규칙마다 다를 수 있다(빅장, 같은 수 되풀이). 그런데 useAnalysis 는 국면 열쇠가
