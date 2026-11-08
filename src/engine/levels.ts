@@ -118,6 +118,19 @@ export const limitsOf = (level: Level): SearchLimits => ({ nodes: level.nodes })
 export const HINT_LIMITS: SearchLimits = { nodes: 300_000, movetimeMs: 3_000 };
 
 /**
+ * 분석판이 한 국면을 읽는 양. 노드와 시간 중 먼저 닿는 쪽에서 멈추고, 국면이 바뀔 때까지 다시
+ * 돌지 않는다. 끝없이 돌리면 폰이 뜨거워지고 배터리가 준다.
+ *
+ * 200만 노드는 복기 '정밀' 한 국면과 같은 양이다. 2026-11-02 힌트 시간을 잴 때의 속도(보통 PC,
+ * 스레드 넷 초당 약 100만, 하나 약 25만 노드)로 넷이면 약 2초, 하나(앱 안 브라우저)면 약 8초다.
+ * 폰은 재지 못했다. 더 느린 기기가 오래 돌지 않게 10초에서 끊는다.
+ */
+export const ANALYSIS_LIMITS: SearchLimits = { nodes: 2_000_000, movetimeMs: 10_000 };
+
+/** 분석판이 보이는 추천 수의 개수. 엔진의 MultiPV 로 건다(App 의 엔진 설정). */
+export const ANALYSIS_LINES = 3;
+
+/**
  * 한 수에 걸리는 대략의 시간(초).
  *
  * 이 기기의 실제 속도가 아니라 보통 PC 기준(초당 25만 노드)의 어림값이다.

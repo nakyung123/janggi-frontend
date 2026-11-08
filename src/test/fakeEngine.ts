@@ -57,6 +57,12 @@ export class FakeEngine {
   probeAnswer: ((ref: PositionRef) => Partial<PositionProbe> | null) | null = null;
   /** true 면 한 국면 탐색(analyzeOnce, 복기가 쓴다)의 답을 releaseOnce() 까지 붙잡는다. 복기가 도는 채로 둘 때. */
   holdOnce = false;
+  /**
+   * true 면 탐색(analyze)의 답을 releaseSearches() 까지 붙잡는다. 풀면 그사이 stop 했어도 답을
+   * 보낸다 - 진짜 엔진도 끊긴 탐색의 마지막 결과를 보낸다(engine.ts 의 runSearch 끝 flush).
+   * 늦게 온 결과를 앱이 버리는지 볼 때 쓴다.
+   */
+  holdSearch = false;
 
   // --- 기록 ------------------------------------------------------------------
 
@@ -64,6 +70,8 @@ export class FakeEngine {
   searches: string[] = [];
   /** 탐색을 끝내고 내놓은 수, 내놓은 차례대로. */
   answers: string[] = [];
+  /** 합법수·장군을 물은 국면의 열쇠(positionKey), 물은 차례대로. */
+  probes: string[] = [];
   /** 한 국면 탐색(analyzeOnce, 복기·힌트가 쓴다)을 받은 차례대로. 그때의 실력 손잡이와 탐색량까지. */
   onceCalls: { key: string; skill: number; limits: SearchLimits; answer: string | null }[] = [];
 
@@ -71,6 +79,7 @@ export class FakeEngine {
   private gen = 0;
   private held: (() => void)[] = [];
   private heldOnce: (() => void)[] = [];
+  private heldSearch: (() => void)[] = [];
 
   /** 테스트를 시작할 때마다 손잡이와 기록을 처음으로 돌린다. */
   reset() {
@@ -80,6 +89,9 @@ export class FakeEngine {
     this.probeAnswer = null;
     this.holdOnce = false;
     this.heldOnce = [];
+    this.holdSearch = false;
+    this.heldSearch = [];
+    this.probes = [];
     this.searches = [];
     this.answers = [];
     this.onceCalls = [];
@@ -96,6 +108,19 @@ export class FakeEngine {
   releaseProbes() {
     const held = this.held;
     this.held = [];
+    for (const send of held) send();
+  }
+
+  /** 붙잡아 둔 탐색 답의 수 */
+  get heldSearches(): number {
+    return this.heldSearch.length;
+  }
+
+  /** 붙잡아 둔 탐색 답을 모두 보내고, 그 뒤로는 붙잡지 않는다. */
+  releaseSearches() {
+    this.holdSearch = false;
+    const held = this.heldSearch;
+    this.heldSearch = [];
     for (const send of held) send();
   }
 
@@ -130,6 +155,7 @@ export class FakeEngine {
   }
 
   async probe(ref: PositionRef): Promise<PositionProbe> {
+    this.probes.push(positionKey(ref));
     const pos = positionOf(ref);
     const answer: PositionProbe = {
       fen: toFen(pos),
@@ -141,15 +167,27 @@ export class FakeEngine {
     return new Promise((resolve) => this.held.push(() => resolve(answer)));
   }
 
-  /** 탐색. searchMs 뒤에 둘 수를 한 번 알린다. 그 전에 stop 하면 알리지 않는다. */
+  /**
+   * 탐색. searchMs 뒤에 둘 수를 한 번 알린다. 그 전에 stop 하면 알리지 않는다(holdSearch 로 붙잡은
+   * 답은 빼고). 결과에는 설정의 MultiPV 만큼 줄을 담는다 - 합법수 앞에서부터, 점수 0.
+   */
   analyze(ref: PositionRef, _limits: SearchLimits, onUpdate: (snap: AnalysisSnapshot) => void): void {
     this.searches.push(positionKey(ref));
     const gen = ++this.gen;
+    const pos = positionOf(ref);
+    const multiPV = this.options.multiPV;
+    const send = () => {
+      const move = bestMove(pos);
+      if (move) this.answers.push(move);
+      onUpdate(snapshotOf(move, linesOf(pos, multiPV)));
+    };
+    if (this.holdSearch) {
+      this.heldSearch.push(send);
+      return;
+    }
     setTimeout(() => {
       if (gen !== this.gen) return;
-      const move = bestMove(positionOf(ref));
-      if (move) this.answers.push(move);
-      onUpdate(snapshotOf(move));
+      send();
     }, this.searchMs);
   }
 
@@ -211,6 +249,17 @@ function bestMove(pos: Position): string | null {
   );
 }
 
-function snapshotOf(bestmove: string | null): AnalysisSnapshot {
-  return { lines: [], depth: 1, nodes: 1, nps: 1, timeMs: 1, hashfull: 0, bestmove, running: false };
+/** 추천 수 줄. 한수쉼이 아닌 합법수 앞에서부터 n 개. */
+function linesOf(pos: Position, n: number): AnalysisSnapshot["lines"] {
+  return legalMoves(pos)
+    .filter((m) => {
+      const { from, to } = splitMove(m);
+      return from !== to;
+    })
+    .slice(0, n)
+    .map((m, i) => ({ multipv: i + 1, depth: 1, seldepth: 1, score: 0, mate: null, pv: [m] }));
+}
+
+function snapshotOf(bestmove: string | null, lines: AnalysisSnapshot["lines"] = []): AnalysisSnapshot {
+  return { lines, depth: 1, nodes: 1, nps: 1, timeMs: 1, hashfull: 0, bestmove, running: false };
 }
