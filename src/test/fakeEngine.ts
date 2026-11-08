@@ -72,8 +72,6 @@ export class FakeEngine {
   answers: string[] = [];
   /** 합법수·장군을 물은 국면의 열쇠(positionKey), 물은 차례대로. */
   probes: string[] = [];
-  /** 설정을 받은 차례대로(setOptions 가 받은 뒤의 설정 전체). */
-  optionsLog: EngineOptions[] = [];
   /** 한 국면 탐색(analyzeOnce, 복기·힌트가 쓴다)을 받은 차례대로. 그때의 실력 손잡이와 탐색량까지. */
   onceCalls: { key: string; skill: number; limits: SearchLimits; answer: string | null }[] = [];
 
@@ -94,7 +92,6 @@ export class FakeEngine {
     this.holdSearch = false;
     this.heldSearch = [];
     this.probes = [];
-    this.optionsLog = [];
     this.searches = [];
     this.answers = [];
     this.onceCalls = [];
@@ -155,7 +152,6 @@ export class FakeEngine {
 
   async setOptions(patch: Partial<EngineOptions>): Promise<void> {
     this.options = { ...this.options, ...patch };
-    this.optionsLog.push({ ...this.options });
   }
 
   async probe(ref: PositionRef): Promise<PositionProbe> {

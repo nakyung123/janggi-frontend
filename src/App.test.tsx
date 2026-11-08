@@ -883,10 +883,11 @@ describe("깔때기 숫자", () => {
 
 /*
  * 분석판은 메뉴 화면이지만 엔진을 쓴다. 엔진은 하나라 App 이 대국과 나눠 쓴다
- * (hooks/useAnalysisBoard 머리 주석). 여기서는 넷을 본다.
+ * (hooks/useAnalysisBoard 머리 주석). 여기서는 다섯을 본다.
  *   - 잘못된 국면은 엔진에 묻지 않는다(엔진은 궁 없는 판에도, 궁을 잡는 수에도 답한다)
  *   - 분석판을 오가도 대국 탭의 판·시계·엔진 설정이 그대로다
  *   - 분석판 규칙은 고르기 전에는 대국 탭 규칙을 따라간다
+ *   - 규칙만 바꿔도 같은 국면의 합법수를 다시 묻는다
  *   - 늦게 온 분석 결과가 바뀐 국면에 서지 않는다
  */
 describe("분석판", () => {
@@ -989,6 +990,24 @@ describe("분석판", () => {
     await waitFor(() => expect(자리들()).not.toBe(떠날때판), { timeout: 3000 });
     await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
     expect(engine().getOptions()).toMatchObject({ multiPV: 1, variant: "janggi", skill: 20 });
+  });
+
+  it("국면은 그대로 두고 규칙만 바꿔도 합법수를 새 규칙으로 다시 묻는다", async () => {
+    // 합법수는 규칙마다 다를 수 있다(빅장, 같은 수 되풀이). 그런데 useAnalysis 는 국면 열쇠가
+    // 바뀔 때만 다시 묻고, 국면 열쇠에는 규칙이 없다. 분석판 훅이 규칙을 바꾼 그림에서 엔진을
+    // 한 번 빼서 다시 묻게 한다 - 그 장치가 빠지면 이 시험이 실패한다.
+    await start();
+    메뉴("분석판");
+    await waitFor(() => expect(추천수()).toHaveLength(3));
+    const 처음차림 = engine().probes[engine().probes.length - 1];
+    const 물은수 = () => engine().probes.filter((k) => k === 처음차림).length;
+    const 앞 = 물은수();
+
+    fireEvent.click(screen.getByRole("combobox", { name: /규칙/ }));
+    fireEvent.click(screen.getByRole("option", { name: /현대/ }));
+    await waitFor(() => expect(물은수()).toBe(앞 + 1));
+    expect(engine().getOptions().variant).toBe("janggimodern");
+    expect(engine().probes[engine().probes.length - 1]).toBe(처음차림);
   });
 
   it("분석판 규칙은 고르기 전에는 대국 탭 규칙을 따라가고, 고른 뒤에는 따로 둔다", async () => {
