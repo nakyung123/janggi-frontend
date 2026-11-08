@@ -92,6 +92,7 @@ import {
   sideTag,
   statusMessage,
   trailingPasses,
+  variantRules,
 } from "./janggi/status";
 import type { Outcome } from "./janggi/status";
 
@@ -406,10 +407,7 @@ export default function App() {
 
   // --- 판정 ------------------------------------------------------------
 
-  /** 점수제(200수·빅장·양쪽 한수쉼을 점수로 가림)가 있는지. 전통 규칙은 없고 비긴다. */
-  const pointsRule = variant !== "janggitraditional";
-  /** 빅장 규칙이 있는지. 현대(카카오) 규칙에서는 두 궁이 마주 봐도 아무 일이 없다. */
-  const bikjangRule = variant !== "janggimodern";
+  const { pointsRule, bikjangRule } = variantRules(variant);
   const passesInRow = useMemo(() => trailingPasses(positionRef.moves), [positionRef]);
   const gstatus = useMemo(
     () =>

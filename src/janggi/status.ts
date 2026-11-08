@@ -12,6 +12,7 @@
 //
 // 그래서 판정 기준은 "장군인데 한수쉼 말고는 둘 게 없음" 이다.
 
+import type { Variant } from "../engine/types";
 import type { Position, Square } from "./board";
 import { rankOf, validate } from "./board";
 import { 이가 } from "./korean";
@@ -78,6 +79,19 @@ export function kingsFacing(position: Position): boolean {
     if (position.board[cho[0] + r]) return false;
   }
   return true;
+}
+
+/**
+ * 규칙마다 판정에 쓰는 것이 있는지. 대국 탭과 분석판이 같이 쓴다 - 두 곳이 따로 정하면 규칙을
+ * 더하거나 고칠 때 같은 국면을 다르게 판정한다.
+ *   pointsRule  점수제(200수·빅장·양쪽 한수쉼을 점수로 가림). 전통 규칙은 없고 비긴다.
+ *   bikjangRule 빅장. 현대(카카오) 규칙에서는 두 궁이 마주 봐도 아무 일이 없다.
+ */
+export function variantRules(variant: Variant): { pointsRule: boolean; bikjangRule: boolean } {
+  return {
+    pointsRule: variant !== "janggitraditional",
+    bikjangRule: variant !== "janggimodern",
+  };
 }
 
 export interface StatusInput {

@@ -38,7 +38,7 @@ import { movesOf, nextEntry, startHistory } from "../janggi/history";
 import { arrowOf, splitMove } from "../janggi/notation";
 import type { PieceChar, PieceType, Side } from "../janggi/pieces";
 import { charOf, sideOf } from "../janggi/pieces";
-import { gameStatus, outcomeOf, trailingPasses } from "../janggi/status";
+import { gameStatus, outcomeOf, trailingPasses, variantRules } from "../janggi/status";
 import type { GameStatus, Outcome } from "../janggi/status";
 import { useBoardTouch } from "./useBoardTouch";
 
@@ -204,8 +204,7 @@ export function useAnalysisBoard(options: Options): AnalysisBoard {
         checkers,
         ready: probed,
         plies: cursor,
-        pointsRule: variant !== "janggitraditional",
-        bikjangRule: variant !== "janggimodern",
+        ...variantRules(variant),
         passesInRow: trailingPasses(ref.moves),
       }),
     [position, legal, checkers, probed, cursor, variant, ref]
