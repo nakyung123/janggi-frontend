@@ -25,6 +25,8 @@ import { describeMove, splitMove } from "./janggi/notation";
 import type { Side } from "./janggi/pieces";
 import { sideOf } from "./janggi/pieces";
 import { reviewMove } from "./janggi/review";
+import type { EndgamePosition } from "./janggi/endgame";
+import { numberOf, positionsOf } from "./janggi/endgame";
 import { FakeEngine } from "./test/fakeEngine";
 
 vi.mock("./engine/engine", async () => ({
@@ -1021,7 +1023,14 @@ describe("분석판", () => {
     const 대국패널 = () => document.querySelector(".panel.play") as HTMLElement;
     await start();
 
-    // 앱을 연 뒤 대국 탭에서 규칙을 바꾸고(첫 수 전) 분석판을 처음 연다.
+    // 분석판을 한 번 열기만 하고(규칙을 고르지 않고) 대국 탭으로 돌아간다. 처음 열 때 대국 규칙을
+    // 한 번 받아 굳히는 길이면, 아래에서 대국 규칙을 바꿔도 분석판이 표준에 남아 실패한다.
+    메뉴("분석판");
+    expect(규칙칸(document.body).textContent).toContain("표준");
+    await waitFor(() => expect(engine().getOptions()).toMatchObject({ multiPV: 3, variant: "janggi" }));
+    메뉴("대국");
+
+    // 대국 탭에서 규칙을 바꾸고(첫 수 전) 분석판을 다시 연다.
     규칙고르기(대국패널(), /현대/);
     await waitFor(() => expect(engine().getOptions().variant).toBe("janggimodern"));
     메뉴("분석판");
@@ -1060,5 +1069,154 @@ describe("분석판", () => {
     expect(화살표()).not.toBeNull();
     const 새국면 = engine().searches[engine().searches.length - 1];
     expect(새국면.startsWith("rnba1abnr/4k4/1c5c1/p1p1p1p1p/9/9/2P1P1P1P/")).toBe(true);
+  });
+});
+
+describe("끝내기", () => {
+  const 메뉴 = (name: string) => fireEvent.click(screen.getAllByRole("button", { name })[0]);
+  const 시계들 = () => Array.from(document.querySelectorAll(".player-clock b")).map((b) => b.textContent);
+  const 자리들 = () =>
+    Array.from(document.querySelectorAll("[data-piece]"))
+      .map((g) => g.getAttribute("data-piece"))
+      .sort()
+      .join(",");
+  const 국면열기 = (p: EndgamePosition) => fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${numberOf(p)}번 `) }));
+  const 깬기록 = () => JSON.parse(localStorage.getItem("janggi:endgame-cleared") ?? "null");
+
+  /** 시작 국면에서 내 기물(궁 말고) 하나가 한 칸 옮겨 갈 수 있는 빈 자리. 가짜 엔진의 합법수다. */
+  function 내수(fen: string): { from: string; to: string } {
+    const pos = parseFen(fen);
+    const files = "abcdefghi";
+    for (const [sq, ch] of Object.entries(pos.board)) {
+      if (sideOf(ch) !== pos.turn || ch.toLowerCase() === "k") continue;
+      const f = files.indexOf(sq[0]);
+      const r = Number(sq.slice(1));
+      for (const [df, dr] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+        const to = files[f + df] && r + dr >= 1 && r + dr <= 10 ? files[f + df] + (r + dr) : null;
+        if (to && !pos.board[to]) return { from: sq, to };
+      }
+    }
+    throw new Error("둘 수가 없는 국면: " + fen);
+  }
+
+  /** 열린 국면에서 내 수를 하나 둔다(합법수가 와서 기물을 집을 수 있을 때까지 기다린 뒤). */
+  async function 내가둠(p: EndgamePosition) {
+    await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
+    const { from, to } = 내수(p.fen);
+    drag(from, to);
+    await waitFor(() => expect(piece(to)).not.toBeNull());
+  }
+
+  /** 내 첫 수 뒤 국면을 외통으로 만든다(AI 가 둘 수 없고 장군을 받음). */
+  const 첫수뒤외통 = () => {
+    engine().probeAnswer = (ref) => (ref.moves.length === 1 ? { legal: [], checkers: ["a1"] } : null);
+  };
+
+  const 첫국면 = () => positionsOf("endgame")[0];
+
+  it("끝내기를 오가도 대국 탭의 판·시계·엔진 설정이 그대로이고, 엔진 차례였으면 돌아와서 둔다", async () => {
+    await start();
+    drag("c4", "c5");
+    await engineReply(1);
+
+    // 엔진이 생각하는 동안(0.6초) 끝내기로 간다.
+    engine().searchMs = 600;
+    await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
+    const 앞탐색 = engine().searches.length;
+    drag("g4", "g5");
+    await waitFor(() => expect(engine().searches.length).toBeGreaterThan(앞탐색));
+    const 떠날때시계 = 시계들();
+    const 떠날때판 = 자리들();
+    메뉴("끝내기");
+    // 끝내기에 있는 동안은 그 국면의 규칙(현대)과 가장 센 실력이다.
+    await waitFor(() => expect(engine().getOptions()).toMatchObject({ multiPV: 1, variant: "janggimodern", skill: 20 }));
+
+    // 한 판 둔다: 내가 두면 AI 가 응수한다.
+    engine().searchMs = 0;
+    국면열기(첫국면());
+    const 앞답 = engine().answers.length;
+    await 내가둠(첫국면());
+    await waitFor(() => expect(engine().answers.length).toBeGreaterThan(앞답), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByText("내 차례")).toBeTruthy(), { timeout: 3000 });
+    expect(engine().getOptions()).toMatchObject({ variant: "janggimodern", skill: 20 });
+
+    메뉴("대국");
+    await waitFor(() => expect(engine().getOptions()).toMatchObject({ multiPV: 1, variant: "janggi", skill: -7 }));
+    expect(piece("c5")).not.toBeNull();
+    expect(piece("g5")).not.toBeNull();
+    expect(시계들()).toEqual(떠날때시계);
+    expect(자리들()).toBe(떠날때판);
+    // 엔진이 이어서 둔다 - 판의 기물 자리가 떠날 때와 달라진다.
+    await waitFor(() => expect(자리들()).not.toBe(떠날때판), { timeout: 3000 });
+    await waitFor(() => expect(pickable().length).toBeGreaterThan(0));
+    expect(engine().getOptions()).toMatchObject({ multiPV: 1, variant: "janggi", skill: 20 });
+  }, 15_000);
+
+  it("이룬 판은 깬 국면으로 남고, 기보 목록·결과 창·측정에는 가지 않는다", async () => {
+    await start();
+    const 앞기보 = localStorage.getItem("janggi:games");
+    메뉴("끝내기");
+    expect(screen.getByText(/0개 깸/)).toBeTruthy();
+    국면열기(첫국면());
+    첫수뒤외통();
+    await 내가둠(첫국면());
+
+    await waitFor(() => expect(screen.getByText("목표를 이뤘습니다.")).toBeTruthy());
+    expect(screen.getByText("외통입니다. 1수 만에 이겼습니다.")).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(localStorage.getItem("janggi:games")).toBe(앞기보);
+    expect(보낸횟수("game_end") + 보낸횟수("first_move") + 보낸횟수("game_start")).toBe(0);
+    expect(깬기록()).toEqual({ cleared: [첫국면().id] });
+
+    // 목록으로 돌아가면 깬 표시가 선다. 다른 메뉴에 갔다 와도 목록이다(두던 국면은 끝난다).
+    fireEvent.click(screen.getByRole("button", { name: "목록으로" }));
+    expect(screen.getByRole("button", { name: new RegExp(`^1번 .*, 깸$`) })).toBeTruthy();
+    expect(screen.getByText(/1개 깸/)).toBeTruthy();
+  });
+
+  it("힌트나 무르기를 쓴 판은 이뤄도 깬 국면으로 남기지 않는다", async () => {
+    await start();
+    메뉴("끝내기");
+    국면열기(첫국면());
+    await waitFor(() => expect(hintButton().disabled).toBe(false));
+    fireEvent.click(hintButton());
+    await waitFor(() => expect(screen.getByText(/^AI의 수 /)).toBeTruthy());
+    첫수뒤외통();
+    await 내가둠(첫국면());
+
+    await waitFor(() => expect(screen.getByText("목표를 이뤘습니다.")).toBeTruthy());
+    expect(screen.getByText("힌트나 무르기를 써서 깬 국면으로 남기지 않습니다.")).toBeTruthy();
+    expect(깬기록()).toBeNull();
+
+    // 다시 하기는 시작 국면으로 돌린다. 이번에는 아무것도 쓰지 않고 이룬다.
+    fireEvent.click(screen.getByRole("button", { name: "다시 하기" }));
+    expect(자리들()).toBe(Object.keys(parseFen(첫국면().fen).board).sort().join(","));
+    await 내가둠(첫국면());
+    await waitFor(() => expect(screen.getByText("목표를 이뤘습니다.")).toBeTruthy());
+    expect(깬기록()).toEqual({ cleared: [첫국면().id] });
+  });
+
+  it("다른 탭이 남긴 기록을 지우지 않고, 깨진 기록이면 빈 기록으로 시작한다", async () => {
+    localStorage.setItem("janggi:endgame-cleared", "[1,2]");
+    await start();
+    메뉴("끝내기");
+    expect(screen.getByText(/0개 깸/)).toBeTruthy();
+
+    // 이 탭이 띄운 뒤 다른 탭이 둘째 국면을 깼다. storage 이벤트로 표시가 맞춰진다.
+    const 둘째 = positionsOf("endgame")[1];
+    localStorage.setItem("janggi:endgame-cleared", JSON.stringify({ cleared: [둘째.id] }));
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: "janggi:endgame-cleared" }));
+    });
+    expect(screen.getByText(/1개 깸/)).toBeTruthy();
+
+    // 다른 탭이 또 남겼는데 이벤트가 아직 오지 않았다(이벤트는 늦게 올 수 있다). 이 탭이 첫 국면을
+    // 깨면 쓰기 직전에 다시 읽어 합쳐 쓴다 - 다른 탭의 기록이 남는다. 데이터에 없는 id 도 지우지 않는다.
+    localStorage.setItem("janggi:endgame-cleared", JSON.stringify({ cleared: [둘째.id, "다른탭-국면"] }));
+    국면열기(첫국면());
+    첫수뒤외통();
+    await 내가둠(첫국면());
+    await waitFor(() => expect(screen.getByText("목표를 이뤘습니다.")).toBeTruthy());
+    expect(깬기록()).toEqual({ cleared: [둘째.id, "다른탭-국면", 첫국면().id] });
   });
 });

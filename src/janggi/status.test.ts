@@ -19,6 +19,7 @@ import {
   sideTag,
   statusMessage,
   trailingPasses,
+  variantRules,
 } from "./status";
 import type { GameStatus } from "./status";
 import { HAN_DEOM } from "./pieces";
@@ -377,5 +378,18 @@ describe("양쪽 한수쉼", () => {
     expect(sideTag({ kind: "playing" }, { kind: "bikjang", winner: "cho" }, "han")).toEqual({ text: "빅장패", tone: "lose" });
     expect(sideTag({ kind: "playing" }, { kind: "passes", winner: "cho" }, "han")).toEqual({ text: "점수패", tone: "lose" });
     expect(sideTag({ kind: "playing" }, { kind: "bikjang", winner: null }, "han")).toEqual({ text: "무승부", tone: "draw" });
+  });
+});
+
+/*
+ * 규칙 이름 → 판정 손잡이 둘. 대국 탭·분석판·끝내기가 이 대응 하나로 판정한다. 대응이 틀리면
+ * 같은 국면이 규칙마다 엉뚱하게 끝나는데(현대에서 빅장이 걸리거나 전통에서 200수 점수가 남),
+ * 위 시험들은 손잡이를 직접 넘기므로 이 대응을 보지 않는다.
+ */
+describe("규칙마다 쓰는 판정", () => {
+  it("표준은 점수제·빅장, 현대는 점수제만, 전통은 빅장만", () => {
+    expect(variantRules("janggi")).toEqual({ pointsRule: true, bikjangRule: true });
+    expect(variantRules("janggimodern")).toEqual({ pointsRule: true, bikjangRule: false });
+    expect(variantRules("janggitraditional")).toEqual({ pointsRule: false, bikjangRule: true });
   });
 });
