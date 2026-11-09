@@ -1021,7 +1021,14 @@ describe("분석판", () => {
     const 대국패널 = () => document.querySelector(".panel.play") as HTMLElement;
     await start();
 
-    // 앱을 연 뒤 대국 탭에서 규칙을 바꾸고(첫 수 전) 분석판을 처음 연다.
+    // 분석판을 한 번 열기만 하고(규칙을 고르지 않고) 대국 탭으로 돌아간다. 처음 열 때 대국 규칙을
+    // 한 번 받아 굳히는 길이면, 아래에서 대국 규칙을 바꿔도 분석판이 표준에 남아 실패한다.
+    메뉴("분석판");
+    expect(규칙칸(document.body).textContent).toContain("표준");
+    await waitFor(() => expect(engine().getOptions()).toMatchObject({ multiPV: 3, variant: "janggi" }));
+    메뉴("대국");
+
+    // 대국 탭에서 규칙을 바꾸고(첫 수 전) 분석판을 다시 연다.
     규칙고르기(대국패널(), /현대/);
     await waitFor(() => expect(engine().getOptions().variant).toBe("janggimodern"));
     메뉴("분석판");
