@@ -131,6 +131,16 @@ export const ANALYSIS_LIMITS: SearchLimits = { nodes: 2_000_000, movetimeMs: 10_
 export const ANALYSIS_LINES = 3;
 
 /**
+ * 끝내기·국면 연습의 AI 한 수. 실력은 가장 센 손잡이(Skill 20, App 의 엔진 설정이 대국 탭이 아닐 때 거는
+ * 값)이고, 탐색량은 힌트와 같다. 급수표의 어느 칸과도 같지 않아 화면에는 "AI" 로 적는다.
+ *
+ * 고정이다. 약한 AI 는 끝내기를 저절로 이뤄지게 하고, 데이터의 국면은 이 세기(와 둘레 20만·50만
+ * 노드)로 엔진끼리 둬서 고른 것이라 다른 세기로 두면 그 확인이 뜻을 잃는다(scripts/endgame-data.mjs).
+ * 폰에서 3초에 끊기면 AI 가 약해지는 쪽이라 목표가 어려워지지는 않는다.
+ */
+export const ENDGAME_AI_LIMITS: SearchLimits = { nodes: 300_000, movetimeMs: 3_000 };
+
+/**
  * 한 수에 걸리는 대략의 시간(초).
  *
  * 이 기기의 실제 속도가 아니라 보통 PC 기준(초당 25만 노드)의 어림값이다.

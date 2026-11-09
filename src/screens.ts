@@ -8,13 +8,14 @@
 // 엔진·두던 판·복기를 쥔 App 이 직접 그리므로 Component 가 없다.
 //
 // 컴포넌트는 App 이 쥔 기보 목록과 로그인·서버 상태를 props(ScreenProps)로 받는다. 쓰지 않는
-// 화면은 받지 않는 것처럼 두면 된다(배우기 화면). 분석판은 App 이 쥔 분석판 상태도 받는다(PageProps).
+// 화면은 받지 않는 것처럼 두면 된다(배우기 화면). 분석판·끝내기·국면 연습은 App 이 쥔 그 상태도 받는다(PageProps).
 //
 // 만든 화면만 넣는다. 빈 화면이나 "준비 중" 을 띄우지 않는다. 항목이 없는 묶음은 메뉴에
 // 뜨지 않는다.
 
 import type { ComponentType } from "react";
 import { AnalysisScreen } from "./components/analysis/AnalysisScreen";
+import { EndgameScreen, PositionsScreen } from "./components/endgame/EndgameScreen";
 import { CoordsScreen } from "./components/learn/CoordsScreen";
 import { OpeningsScreen } from "./components/learn/OpeningsScreen";
 import { ReadingsScreen } from "./components/learn/ReadingsScreen";
@@ -26,6 +27,7 @@ import { MateScreen } from "./components/mate/MateScreen";
 import { TimedScreen } from "./components/mate/TimedScreen";
 import { StatsScreen } from "./components/record/StatsScreen";
 import type { AnalysisBoard } from "./hooks/useAnalysisBoard";
+import type { EndgameBoard } from "./hooks/useEndgame";
 import type { ServerGames } from "./hooks/useServerGames";
 import type { ArchivedGame } from "./janggi/archive";
 
@@ -53,14 +55,16 @@ export interface ScreenProps {
 }
 
 /**
- * App 이 메뉴 화면에 넘기는 것 전부. ScreenProps 에 분석판의 상태와 엔진 답을 더한 것이다 - 엔진은
- * App 하나가 돌리므로 App 이 훅(useAnalysisBoard)을 쥐고 넘긴다. 분석판 말고는 쓰지 않는다.
+ * App 이 메뉴 화면에 넘기는 것 전부. ScreenProps 에 분석판·끝내기의 상태와 엔진 답을 더한 것이다 - 엔진은
+ * App 하나가 돌리므로 App 이 훅(useAnalysisBoard, useEndgame)을 쥐고 넘긴다. 그 화면들 말고는 쓰지 않는다.
  *
  * ScreenProps 에 바로 넣지 않은 까닭: ScreenProps 를 통째로 받는 화면(내 전적)의 시험이 그 모양으로
  * props 를 만들어 넘긴다. 칸이 늘면 쓰지도 않는 분석판 상태를 시험마다 지어 넣어야 한다.
  */
 export interface PageProps extends ScreenProps {
   analysis: AnalysisBoard;
+  /** 끝내기·국면 연습의 상태와 엔진 답. 두 화면이 같이 쓴다. */
+  endgame: EndgameBoard;
 }
 
 export type Screen =
@@ -79,6 +83,8 @@ const list = [
   { id: "openings", group: "learn", label: "포진", Component: OpeningsScreen },
   { id: "readings", group: "learn", label: "읽을거리", Component: ReadingsScreen },
   { id: "analysis", group: "practice", label: "분석판", Component: AnalysisScreen },
+  { id: "endgame", group: "practice", label: "끝내기", Component: EndgameScreen },
+  { id: "positions", group: "practice", label: "국면 연습", Component: PositionsScreen },
   { id: "games", group: "record", label: "기보" },
   { id: "stats", group: "record", label: "내 전적", Component: StatsScreen },
 ] as const satisfies readonly Screen[];

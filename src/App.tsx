@@ -57,6 +57,7 @@ import { forgetIfMoved, isEnginePrefs, isVariant, positionKey } from "./engine/t
 import { useAnalysis, useEngine, useHint } from "./engine/useEngine";
 import { useAnalysisBoard } from "./hooks/useAnalysisBoard";
 import { useBoardFit } from "./hooks/useBoardFit";
+import { useEndgame } from "./hooks/useEndgame";
 import { useClockTicking, useGameClock } from "./hooks/useGameClock";
 import { useKeyboard } from "./hooks/useKeyboard";
 import { useNarrow } from "./hooks/useNarrow";
@@ -350,17 +351,29 @@ export default function App() {
     defaultVariant: prefs.variant,
   });
 
+  /*
+   * 끝내기·국면 연습 - 정해진 국면에서 AI 와 이어 둔다. 분석판과 같은 길이다: 엔진은 그 화면일 때만
+   * 넘기고, 엔진 설정은 아래 options 가 그 국면의 규칙으로 계산한다. AI 와 힌트는 실력 20 으로 두는데,
+   * 대국 탭이 아니면 options 가 이미 20 이다. 기보 목록에 넣지 않는다(hooks/useEndgame 머리 주석).
+   */
+  const endgameGroup = mode === "endgame" ? "endgame" : mode === "positions" ? "middle" : null;
+  const endgame = useEndgame({
+    engine: endgameGroup ? engine : null,
+    engineStatus: status,
+    group: endgameGroup,
+  });
+
   const options: EngineOptions = useMemo(
     () => ({
       ...prefs,
-      variant: mode === "analysis" ? analysis.variant : variant,
+      variant: mode === "analysis" ? analysis.variant : endgameGroup ? endgame.variant : variant,
       // 엔진은 제 수 하나만 고른다. 후보를 넓게 보면 느려질 뿐이다. 분석판은 추천 수 셋을 보인다.
       multiPV: mode === "analysis" ? ANALYSIS_LINES : 1,
       // 제 차례가 아니면 가장 센 값이다. 합법수·장군만 물을 때는 실력이 상관없고, 힌트(useHint)는
       // 이 값으로 찾는다 - 상대 급수의 세기로 찾으면 일부러 고른 나쁜 수를 가르친다.
       skill: engineTurn ? engineLevel.skill : 20,
     }),
-    [prefs, variant, engineTurn, engineLevel.skill, mode, analysis.variant]
+    [prefs, variant, engineTurn, engineLevel.skill, mode, analysis.variant, endgameGroup, endgame.variant]
   );
 
   /** 탐색을 다시 걸어야 하는지 가리는 열쇠. 이 값이 바뀔 때만 useAnalysis 가 새로 묻는다. */
@@ -1119,7 +1132,7 @@ export default function App() {
 
       {Page ? (
         <main className="page">
-          <Page games={games} server={server} analysis={analysis} />
+          <Page games={games} server={server} analysis={analysis} endgame={endgame} />
         </main>
       ) : booting ? (
         <main className="page">
