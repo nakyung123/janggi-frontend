@@ -10,7 +10,9 @@
 
 import { Check } from "lucide-react";
 import type { EndgameGroup } from "../../janggi/endgame";
-import { goalShort, materialText, numberOf, positionsOf, titleOf } from "../../janggi/endgame";
+import { goalShort, materialText, mySideOf, numberOf, positionsOf, titleOf } from "../../janggi/endgame";
+import { 을를 } from "../../janggi/korean";
+import { SIDE_LABEL } from "../../janggi/pieces";
 import type { PageProps } from "../../screens";
 import { EndgamePlay } from "./EndgamePlay";
 
@@ -52,12 +54,15 @@ function Screen({ group, endgame: e }: { group: EndgameGroup; endgame: PageProps
           {list.map((p) => {
             const no = numberOf(p);
             const isCleared = e.cleared.has(p.id);
+            const side = SIDE_LABEL[mySideOf(p)];
             return (
               <li key={p.id}>
                 <button
                   type="button"
                   className="ghost endgame-item"
-                  aria-label={[`${no}번 ${titleOf(p)}`, goalShort(p.goal), isCleared && "깸"].filter(Boolean).join(", ")}
+                  aria-label={[`${no}번 ${titleOf(p)}`, `${을를(side)} 잡고 ${goalShort(p.goal)}`, isCleared && "깸"]
+                    .filter(Boolean)
+                    .join(", ")}
                   onClick={() => {
                     e.start(p);
                     toTop();
@@ -67,7 +72,10 @@ function Screen({ group, endgame: e }: { group: EndgameGroup; endgame: PageProps
                   <span className="endgame-item-title">
                     {group === "endgame" ? titleOf(p) : `${titleOf(p)} · ${materialText(p)}`}
                   </span>
-                  <span className="muted">{goalShort(p.goal)}</span>
+                  {/* 내 쪽을 목표 앞에 적는다. 제목·기물 점수만으로는 어느 쪽을 잡는지 알 수 없다. */}
+                  <span className="muted">
+                    {side} · {goalShort(p.goal)}
+                  </span>
                   {isCleared && (
                     <span className="endgame-cleared">
                       <Check size={20} strokeWidth={2} aria-hidden />깸
