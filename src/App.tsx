@@ -56,6 +56,7 @@ import type { EngineOptions, PositionRef, SearchLimits, Variant } from "./engine
 import { forgetIfMoved, isEnginePrefs, isVariant, positionKey } from "./engine/types";
 import { useAnalysis, useEngine, useHint } from "./engine/useEngine";
 import { useAnalysisBoard } from "./hooks/useAnalysisBoard";
+import { useMistakes } from "./hooks/useMistakes";
 import { useBoardFit } from "./hooks/useBoardFit";
 import { useClockTicking, useGameClock } from "./hooks/useGameClock";
 import { useKeyboard } from "./hooks/useKeyboard";
@@ -350,17 +351,37 @@ export default function App() {
     defaultVariant: prefs.variant,
   });
 
+  /*
+   * 내 실수 문제 - 복기한 판의 내 큰 실수 자리에서 한 수를 찾는다. 분석판과 같이 엔진은 이 화면일 때만
+   * 넘기고, 규칙(그 판의 규칙)은 아래 options 가 건다. [기보에서 보기]는 그 판을 그 수에 연다.
+   */
+  const mistakes = useMistakes({
+    engine: mode === "mistakes" ? engine : null,
+    engineStatus: status,
+    active: mode === "mistakes",
+    games,
+    onOpenGame: (id, at) => {
+      기기에서열기(id);
+      archive.setCursor(at);
+    },
+  });
+
   const options: EngineOptions = useMemo(
     () => ({
       ...prefs,
-      variant: mode === "analysis" ? analysis.variant : variant,
+      variant:
+        mode === "analysis"
+          ? analysis.variant
+          : mode === "mistakes" && mistakes.variant
+            ? mistakes.variant
+            : variant,
       // 엔진은 제 수 하나만 고른다. 후보를 넓게 보면 느려질 뿐이다. 분석판은 추천 수 셋을 보인다.
       multiPV: mode === "analysis" ? ANALYSIS_LINES : 1,
       // 제 차례가 아니면 가장 센 값이다. 합법수·장군만 물을 때는 실력이 상관없고, 힌트(useHint)는
       // 이 값으로 찾는다 - 상대 급수의 세기로 찾으면 일부러 고른 나쁜 수를 가르친다.
       skill: engineTurn ? engineLevel.skill : 20,
     }),
-    [prefs, variant, engineTurn, engineLevel.skill, mode, analysis.variant]
+    [prefs, variant, engineTurn, engineLevel.skill, mode, analysis.variant, mistakes.variant]
   );
 
   /** 탐색을 다시 걸어야 하는지 가리는 열쇠. 이 값이 바뀔 때만 useAnalysis 가 새로 묻는다. */
@@ -1119,7 +1140,7 @@ export default function App() {
 
       {Page ? (
         <main className="page">
-          <Page games={games} server={server} analysis={analysis} />
+          <Page games={games} server={server} analysis={analysis} mistakes={mistakes} />
         </main>
       ) : booting ? (
         <main className="page">

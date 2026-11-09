@@ -24,8 +24,10 @@ import { TermsScreen } from "./components/learn/TermsScreen";
 import { DailyScreen } from "./components/mate/DailyScreen";
 import { MateScreen } from "./components/mate/MateScreen";
 import { TimedScreen } from "./components/mate/TimedScreen";
+import { MistakesScreen } from "./components/mistakes/MistakesScreen";
 import { StatsScreen } from "./components/record/StatsScreen";
 import type { AnalysisBoard } from "./hooks/useAnalysisBoard";
+import type { Mistakes } from "./hooks/useMistakes";
 import type { ServerGames } from "./hooks/useServerGames";
 import type { ArchivedGame } from "./janggi/archive";
 
@@ -53,14 +55,16 @@ export interface ScreenProps {
 }
 
 /**
- * App 이 메뉴 화면에 넘기는 것 전부. ScreenProps 에 분석판의 상태와 엔진 답을 더한 것이다 - 엔진은
- * App 하나가 돌리므로 App 이 훅(useAnalysisBoard)을 쥐고 넘긴다. 분석판 말고는 쓰지 않는다.
+ * App 이 메뉴 화면에 넘기는 것 전부. ScreenProps 에 엔진을 쓰는 화면의 상태를 더한 것이다 - 엔진은
+ * App 하나가 돌리므로 App 이 훅(useAnalysisBoard, useMistakes)을 쥐고 넘긴다. 그 화면 말고는 쓰지 않는다.
  *
  * ScreenProps 에 바로 넣지 않은 까닭: ScreenProps 를 통째로 받는 화면(내 전적)의 시험이 그 모양으로
  * props 를 만들어 넘긴다. 칸이 늘면 쓰지도 않는 분석판 상태를 시험마다 지어 넣어야 한다.
  */
 export interface PageProps extends ScreenProps {
   analysis: AnalysisBoard;
+  /** 내 실수 문제의 상태. 둘 수 있는 수와 판정에 엔진을 써서 App 이 쥔다(분석판과 같은 까닭). */
+  mistakes: Mistakes;
 }
 
 export type Screen =
@@ -72,6 +76,7 @@ const list = [
   { id: "mate", group: "puzzle", label: "외통 문제", Component: MateScreen },
   { id: "daily", group: "puzzle", label: "오늘의 문제", Component: DailyScreen },
   { id: "timed", group: "puzzle", label: "시간 도전", Component: TimedScreen },
+  { id: "mistakes", group: "puzzle", label: "내 실수 문제", Component: MistakesScreen },
   { id: "pieces", group: "learn", label: "기물", Component: PiecesScreen },
   { id: "rules", group: "learn", label: "규칙", Component: RulesScreen },
   { id: "terms", group: "learn", label: "용어", Component: TermsScreen },

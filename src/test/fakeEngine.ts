@@ -58,6 +58,12 @@ export class FakeEngine {
   /** true 면 한 국면 탐색(analyzeOnce, 복기가 쓴다)의 답을 releaseOnce() 까지 붙잡는다. 복기가 도는 채로 둘 때. */
   holdOnce = false;
   /**
+   * 한 국면 탐색(analyzeOnce)의 점수(초 기준). 돌려주면 답에 그 점수의 줄 하나를 담는다. null 이거나
+   * 손잡이가 없으면 지금처럼 줄 없이 답한다(복기·힌트 시험은 줄을 보지 않는다). 내 실수 문제의
+   * 판정이 두 국면의 점수 차이를 보므로 둔다.
+   */
+  onceScore: ((ref: PositionRef) => { score: number; mate?: number | null } | null) | null = null;
+  /**
    * true 면 탐색(analyze)의 답을 releaseSearches() 까지 붙잡는다. 풀면 그사이 stop 했어도 답을
    * 보낸다 - 진짜 엔진도 끊긴 탐색의 마지막 결과를 보낸다(engine.ts 의 runSearch 끝 flush).
    * 늦게 온 결과를 앱이 버리는지 볼 때 쓴다.
@@ -88,6 +94,7 @@ export class FakeEngine {
     this.illegalAt = null;
     this.probeAnswer = null;
     this.holdOnce = false;
+    this.onceScore = null;
     this.heldOnce = [];
     this.holdSearch = false;
     this.heldSearch = [];
@@ -194,7 +201,13 @@ export class FakeEngine {
   async analyzeOnce(ref: PositionRef, limits: SearchLimits): Promise<AnalysisSnapshot> {
     const move = bestMove(positionOf(ref));
     this.onceCalls.push({ key: positionKey(ref), skill: this.options.skill, limits, answer: move });
-    const answer = snapshotOf(move);
+    const scored = this.onceScore?.(ref);
+    const answer = snapshotOf(
+      move,
+      scored
+        ? [{ multipv: 1, depth: 1, seldepth: 1, score: scored.score, mate: scored.mate ?? null, pv: move ? [move] : [] }]
+        : []
+    );
     if (!this.holdOnce) return answer;
     return new Promise((resolve) => this.heldOnce.push(() => resolve(answer)));
   }
