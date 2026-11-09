@@ -7,11 +7,20 @@
 //
 // 엔진은 궁이 있어야 판을 받는다. 그래서 두 궁을 궁성에 놓은 무작위 국면에서 둘 차례 쪽의
 // pieceMoves 와 엔진 합법수(한수쉼 뺌)를 견주고, 차이는 궁 때문인 것만 있어야 한다:
-//   - 엔진에만 있는 수: 없어야 한다.
-//   - moves.ts 에만 있는 수: 두고 나면 내 궁이 장군이거나(그 국면에 내 차례를 다시 주고 엔진에 묻는다),
-//     두 궁이 마주 본 채(빅장) 그것을 풀지 않는 수여야 한다. 빅장이 있는 규칙(표준·전통)에서 엔진은
-//     빅장을 받은 쪽이 풀지 않는 수를 막는다. 현대 규칙에는 빅장이 없어 이 차이가 없다(status.ts 의
-//     variantRules).
+//   - 엔진에만 있는 수: 없어야 한다. 모든 국면에서 본다.
+//   - moves.ts 에만 있는 수: 두고 나면 내 궁이 장군인 수여야 한다(그 국면에 내 차례를 다시 주고 엔진에
+//     묻는다).
+//
+// 처음부터 궁에 묶인 국면에서는 moves.ts 에만 있는 수를 가리지 않고 따로 센다. 그런 국면에서는 엔진이
+// 대부분의 수를 막아서, moves.ts 의 틀린 수도 "궁 때문" 으로 분류된다:
+//   - 둘 차례 쪽이 이미 장군을 받고 있다. 장군을 풀지 않는 틀린 수도 두고 나면 장군이다.
+//   - 빅장이 있는 규칙(표준·전통)에서 두 궁이 이미 마주 본다(빅장). 엔진은 빅장을 받은 쪽이 풀지 않는
+//     수를 막아서, 빅장을 풀지 않는 틀린 수가 가려진다. 현대 규칙에는 빅장이 없어 이 차이가 없다
+//     (status.ts 의 variantRules).
+// 규칙마다 PER_VARIANT 국면은 이 둘이 아닌 국면, 곧 양쪽을 다 견준 국면으로 채운다.
+//
+// 남는 빈틈: 옮기면 내 궁이 드러나는 기물의 틀린 수는 여전히 장군으로 분류될 수 있다. 행마
+// 계산은 국면마다 따로 짜지 않아서, 같은 틀린 행마는 그 기물이 묶이지 않은 다른 국면에서 잡힌다.
 //
 // 씨앗을 정해 두어 늘 같은 국면을 본다. 엔진 패키지 판이 오르거나 moves.ts 를 고치면 다시 돌아
 // 어긋남을 잡는다. 엔진은 앱이 싣는 것과 같은 패키지다(test/nodeEngine.ts).
@@ -28,6 +37,7 @@ import { sideOf } from "./pieces";
 import { variantRules } from "./status";
 
 const VARIANTS = ["janggi", "janggimodern", "janggitraditional"] as const;
+type VariantName = (typeof VARIANTS)[number];
 /** 규칙마다 볼 국면 수. 2026-11-09 에 1,500 국면 × 씨앗 둘로 잰 것을 작게 줄였다(어긋남 0). */
 const PER_VARIANT = 300;
 
@@ -73,6 +83,8 @@ function facing(board: Board): boolean {
   return true;
 }
 
+const bikjangOf = (variant: VariantName) => variantRules(variant).bikjangRule;
+
 const isPass = (m: string) => m.slice(0, m.length / 2) === m.slice(m.length / 2);
 
 interface Result {
@@ -80,15 +92,18 @@ interface Result {
   captures: number;
   /** moves.ts 에만 있고 두면 내 궁이 장군인 수 */
   selfCheck: number;
-  /** moves.ts 에만 있고 빅장을 풀지 않는 수 */
-  bikjang: number;
+  /** 둘 차례 쪽이 처음부터 장군을 받던 국면(엔진에만 있는 수만 견줬다) */
+  inCheck: number;
+  /** 빅장이 있는 규칙에서 두 궁이 처음부터 마주 본 국면(엔진에만 있는 수만 견줬다) */
+  facing: number;
   problems: string[];
 }
 
-async function compare(engine: NodeEngine, variant: string, seed: number): Promise<Result> {
+async function compare(engine: NodeEngine, variant: VariantName, seed: number): Promise<Result> {
   engine.variant(variant);
   const r = randomOf(seed);
-  const result: Result = { positions: 0, captures: 0, selfCheck: 0, bikjang: 0, problems: [] };
+  const result: Result = { positions: 0, captures: 0, selfCheck: 0, inCheck: 0, facing: 0, problems: [] };
+  const bikjangRule = bikjangOf(variant);
   while (result.positions < PER_VARIANT) {
     const pos = randomPosition(r);
     const mine = (c: PieceChar) => sideOf(c) === pos.turn;
@@ -99,19 +114,28 @@ async function compare(engine: NodeEngine, variant: string, seed: number): Promi
     // 상대 궁을 바로 잡을 수 있는 국면은 대국에서 나오지 않는다(앞 수가 장군을 두고 둔 것). 뺀다.
     const enemyKing = kingOf(pos.board, pos.turn === "cho" ? "han" : "cho");
     if (pseudo.some((m) => splitMove(m).to === enemyKing)) continue;
-    result.positions += 1;
 
     const fen = toFen(pos);
-    const engineMoves = new Set((await engine.probe(fen)).legal.filter((m) => !isPass(m)));
-    result.captures += pseudo.filter((m) => pos.board[splitMove(m).to]).length;
+    const start = await engine.probe(fen);
+    const engineMoves = new Set(start.legal.filter((m) => !isPass(m)));
     for (const m of engineMoves) if (!pseudo.includes(m)) result.problems.push(`${variant} ${fen}: ${m} 은 엔진에만 있음`);
+    // 처음부터 궁에 묶인 국면은 moves.ts 에만 있는 수를 가리지 않는다(머리 주석).
+    if (start.checkers.length > 0) {
+      result.inCheck += 1;
+      continue;
+    }
+    if (bikjangRule && facing(pos.board)) {
+      result.facing += 1;
+      continue;
+    }
+    result.positions += 1;
+    result.captures += pseudo.filter((m) => pos.board[splitMove(m).to]).length;
     for (const m of pseudo) {
       if (engineMoves.has(m)) continue;
       const { from, to } = splitMove(m);
       // 두고 나서 내 차례를 다시 주면, 엔진의 Checkers 가 내 궁에 장군을 거는 기물을 말한다.
       const after = { ...applyMove(pos, from, to), turn: pos.turn };
       if ((await engine.probe(toFen(after))).checkers.length > 0) result.selfCheck += 1;
-      else if (facing(pos.board) && facing(after.board)) result.bikjang += 1;
       else result.problems.push(`${variant} ${fen}: ${m} 은 moves.ts 에만 있고 궁 때문도 아님`);
     }
   }
@@ -124,15 +148,16 @@ describe("moves.ts 와 엔진의 행마", () => {
     engine = await openNodeEngine();
   }, 30_000);
 
-  it.each(VARIANTS)("%s - 무작위 국면에서 차이는 궁 때문(장군·빅장)인 것뿐이다", async (variant) => {
+  it.each(VARIANTS)("%s - 무작위 국면에서 차이는 두면 내 궁이 장군인 수뿐이다", async (variant) => {
     const result = await compare(engine, variant, 7);
     expect(result.problems).toEqual([]);
-    // 시험이 헛돌지 않는지: 국면을 다 봤고, 잡는 수와 궁 때문에 갈린 수가 실제로 나왔다.
+    // 시험이 헛돌지 않는지: 양쪽을 다 견준 국면을 다 봤고, 잡는 수와 궁 때문에 갈린 수가 실제로 나왔다.
     expect(result.positions).toBe(PER_VARIANT);
     expect(result.captures).toBeGreaterThan(100);
     expect(result.selfCheck).toBeGreaterThan(0);
-    // 빅장 때문에 갈린 수는 빅장이 있는 규칙에서만 나온다.
-    if (variantRules(variant).bikjangRule) expect(result.bikjang).toBeGreaterThan(0);
-    else expect(result.bikjang).toBe(0);
+    // 따로 센 국면도 실제로 나왔다(엔진에만 있는 수는 거기서도 봤다). 마주 본 국면은 빅장이 있는 규칙에서만 뺀다.
+    expect(result.inCheck).toBeGreaterThan(0);
+    if (bikjangOf(variant)) expect(result.facing).toBeGreaterThan(0);
+    else expect(result.facing).toBe(0);
   }, 60_000);
 });
