@@ -1,0 +1,7 @@
+/* 혼자 장기 화면(components/solo/). 짜임은 배우기 화면(learn.css)의 것을, 목록 줄·알림 줄·단추 줄은
+   외통 문제 화면(mate.css)의 것을 그대로 쓴다. 여기서는 그 둘에 없는 것만 정한다. */
+
+/* 규칙 카드의 점 목록. 카드 제목(learn-section-title)이 이미 아래 12 를 두므로 목록 위 12 는 뺀다. */
+.solo-rules {
+  margin-top: 0;
+}
