@@ -28,13 +28,21 @@ const GROUPS = LEVELS.map((level) => ({ level, puzzles: SOLOS.filter((p) => p.le
 
 const readRecord = (): SolvedRecord => readStored(KEY, NO_SOLVED, isSolvedRecord);
 
-/** 저장된 값을 다시 읽어 id 를 더해 쓴다. 다른 탭이 그사이 남긴 id 도 같이 남는다. */
+/** 저장된 값을 다시 읽어 id 를 더해 쓰고, 쓴 값을 돌려준다. 다른 탭이 그사이 남긴 id 도 같이 남는다. */
 function saveSolved(id: string): SolvedRecord {
   const before = readRecord();
   const after = withSolved(before, id);
   if (after !== before) writeStored(KEY, after);
   return after;
 }
+
+/**
+ * 화면에 보일 기록. 쓴 값에 화면이 이미 쥔 id 를 더한다. 저장이 막힌 브라우저에서는 다시 읽은 값이 늘
+ * 빈 기록이라, 쓴 값만 보이면 둘째 문제를 풀 때 첫째 문제의 푼 표시가 사라진다(useTimed.ts 의 최고
+ * 기록과 같다). 저장이 되는 브라우저에서는 쓴 값이 화면의 기록을 이미 다 담고 있어 결과가 같다.
+ */
+const shownWith = (shown: SolvedRecord, written: SolvedRecord): SolvedRecord =>
+  shown.solved.reduce(withSolved, written);
 
 /** 문제를 열 때 쪽을 맨 위로 올린다(외통 문제 목록과 같다 - MateScreen.tsx 의 toTop). */
 const toTop = () => document.scrollingElement?.scrollTo?.(0, 0);
@@ -63,7 +71,10 @@ export function SoloScreen() {
         key={open.id}
         puzzle={open}
         title={`${LEVEL_LABEL[open.level]} · ${numberOf(open)}번`}
-        onSolve={(id) => setRecord(saveSolved(id))}
+        onSolve={(id) => {
+          const written = saveSolved(id);
+          setRecord((shown) => shownWith(shown, written));
+        }}
         onNext={next ? () => show(next) : null}
         onBack={() => {
           setCameFrom(open.id);

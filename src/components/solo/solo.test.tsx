@@ -238,6 +238,26 @@ describe("푼 기록", () => {
     expect(기록()).toEqual({ solved: [b.id, a.id] });
   });
 
+  it("저장이 막힌 브라우저에서 둘째 문제를 풀어도 첫째 문제의 푼 표시가 남는다", () => {
+    // 사이트 데이터 저장을 막으면 쓰기가 예외를 던진다. 저장소를 시험 삼아 만지는 safeStore 도 실패해
+    // 읽기는 늘 빈 기록이다(useTimed.test.tsx 의 같은 시험과 같다).
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("저장 막힘");
+    });
+    try {
+      const [a, b] = 묶음(1);
+      render(<SoloScreen />);
+      푼다(a);
+      푼다(b);
+      expect(줄(1, 1).getAttribute("aria-label")).toBe(`1번, 풂, 기물 ${pieceCount(boardOf(a))}개`);
+      expect(줄(1, 2).getAttribute("aria-label")).toBe(`2번, 풂, 기물 ${pieceCount(boardOf(b))}개`);
+      expect(within(묶음칸(1)).getByText("12문제 · 2개 풂")).toBeTruthy();
+      expect(localStorage.getItem(KEY)).toBeNull();
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
   it("데이터에 없는 id 는 지우지 않고 세지도 않는다", () => {
     localStorage.setItem(KEY, JSON.stringify({ solved: ["없는문제id"] }));
     render(<SoloScreen />);
