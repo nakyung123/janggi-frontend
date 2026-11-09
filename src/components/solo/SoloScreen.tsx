@@ -121,7 +121,7 @@ export function SoloScreen() {
                           <Check size={20} strokeWidth={2} aria-hidden />풂
                         </span>
                       )}
-                      <span className="muted">기물 {count}개</span>
+                      <span className="muted solo-count">기물 {count}개</span>
                     </button>
                   </li>
                 );
