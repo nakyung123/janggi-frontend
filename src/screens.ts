@@ -25,6 +25,7 @@ import { DailyScreen } from "./components/mate/DailyScreen";
 import { MateScreen } from "./components/mate/MateScreen";
 import { TimedScreen } from "./components/mate/TimedScreen";
 import { StatsScreen } from "./components/record/StatsScreen";
+import { SoloScreen } from "./components/solo/SoloScreen";
 import type { AnalysisBoard } from "./hooks/useAnalysisBoard";
 import type { ServerGames } from "./hooks/useServerGames";
 import type { ArchivedGame } from "./janggi/archive";
@@ -72,6 +73,7 @@ const list = [
   { id: "mate", group: "puzzle", label: "외통 문제", Component: MateScreen },
   { id: "daily", group: "puzzle", label: "오늘의 문제", Component: DailyScreen },
   { id: "timed", group: "puzzle", label: "시간 도전", Component: TimedScreen },
+  { id: "solo", group: "puzzle", label: "혼자 장기", Component: SoloScreen },
   { id: "pieces", group: "learn", label: "기물", Component: PiecesScreen },
   { id: "rules", group: "learn", label: "규칙", Component: RulesScreen },
   { id: "terms", group: "learn", label: "용어", Component: TermsScreen },
