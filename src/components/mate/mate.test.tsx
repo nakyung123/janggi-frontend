@@ -50,7 +50,7 @@ describe("메뉴", () => {
     const 문제묶음 = [...모드.querySelectorAll(".menu-group")].find(
       (g) => g.querySelector(".menu-heading")?.textContent === "문제"
     )!;
-    expect([...문제묶음.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["외통 문제", "오늘의 문제", "시간 도전"]);
+    expect([...문제묶음.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["외통 문제", "오늘의 문제", "시간 도전", "내 실수 문제"]);
     fireEvent.click(within(모드).getByRole("button", { name: "외통 문제" }));
     expect(screen.getByRole("heading", { level: 2, name: "외통 문제" })).toBeTruthy();
 
